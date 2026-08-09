@@ -69,20 +69,80 @@ session hook + settings.json). Archive or delete once stage 2 is green.
 
 ## Stage 3 — agda-algebras and air (parent-level config, additive)
 
-    ./install.sh agda-algebras agda-native-air      # no --force needed:
-    # parent CLAUDE.md/.claude don't exist yet; worktrees with tracked
-    # .claude are skipped and reported (94 in agda-algebras today)
-    make check PROJECT=agda-algebras ; make probe PROJECT=agda-algebras
-    make check PROJECT=agda-native-air ; make probe PROJECT=agda-native-air
+Manual runbook (William drives). Stage 3 REPLACES NOTHING: it only
+creates new symlinks and two small real dirs at the parent level, next to
+the still-committed config. All commands from
+`~/git/williamdemeo/claude-tooling/main`.
 
-Transitional wrinkle (expected, harmless): until stage 4 lands, worktree
-sessions load BOTH the committed CLAUDE.md and the parent-level one
-(near-identical content; the parent copy adds the merged draft sections
-and the config-placement section). Skills resolve from the tracked
-.claude in those worktrees — same skill set either way.
+**1. Review what will start loading** (the parent CLAUDE.md loads in every
+session under each project dir, in addition to the committed one):
 
-Also in this stage, after confirming the merge in projects/agda-algebras/
-CLAUDE.md is faithful: delete the untracked
+    diff -u ~/git/ualib/agda-algebras/master/CLAUDE.md projects/agda-algebras/CLAUDE.md
+    #   expect ONLY additions: “Library policy”, “Review workflow”,
+    #   “Claude config for this project”, PROBE-MARKER line
+    diff -u ~/git/formalverification/agda-native-air/main/CLAUDE.md projects/agda-native-air/CLAUDE.md
+    #   expect ONLY: “Claude config for this project” + PROBE-MARKER
+    diff -ru ~/git/ualib/agda-algebras/master/.claude/skills projects/agda-algebras/claude/skills
+    diff -ru ~/git/ualib/agda-algebras/master/.claude/hooks  projects/agda-algebras/claude/hooks
+    diff -u  ~/git/ualib/agda-algebras/master/.claude/settings.json projects/agda-algebras/claude/settings.json
+    diff -ru ~/git/formalverification/agda-native-air/main/.claude/skills projects/agda-native-air/claude/skills
+    diff -ru ~/git/formalverification/agda-native-air/main/.claude/hooks  projects/agda-native-air/claude/hooks
+    diff -u  ~/git/formalverification/agda-native-air/main/.claude/settings.json projects/agda-native-air/claude/settings.json
+    #   all six: expect NO output (byte-identical copies)
+
+**2. Dry-run and read every line:**
+
+    ./install.sh --dry-run agda-algebras agda-native-air
+
+Expected: “would link” for parent CLAUDE.md, per-skill links, hooks,
+settings.json; “would create dir” for .claude and .claude/skills; “would
+append /.claude” to each shared info/exclude; “would link” for worktrees
+WITHOUT tracked .claude; and the tracked-content skips (~94 in
+agda-algebras, incl. the master checkout itself; air’s single main
+checkout likewise). Anything else — especially “real file/dir in the
+way” — stop and investigate before proceeding.
+
+**3. Install (deliberately WITHOUT --force**, so any surprise is skipped
+and reported instead of replaced):
+
+    ./install.sh agda-algebras agda-native-air
+
+**4. Verify:**
+
+    make check PROJECT=agda-algebras     # 0 errors; warnings = tracked-transitional only
+    make check PROJECT=agda-native-air
+    make probe PROJECT=agda-algebras     # live: 4+2 skills, own marker, no leakage
+    make probe PROJECT=agda-native-air   # live: 2+2 skills, own marker, no leakage
+    git status --short                   # claude-tooling itself must stay CLEAN
+                                         # (no settings.local.json creeping in)
+
+Optionally eyeball a real session: run `claude` in an agda-algebras
+worktree, `/context` should show the parent CLAUDE.md content (e.g. the
+“Library policy” section), and the skills list its 4 project skills.
+
+**What stage 3 does NOT change:** settings and hooks still come from the
+COMMITTED `.claude` (settings resolve to the MAIN checkout, whose .claude
+is the tracked real dir until stage 4); the parent-level settings.json
+and hooks links are dormant until then. `settings.local.json`
+(`enabledMcpjsonServers`) stays untouched in `master/.claude/`.
+
+**Transitional wrinkle** (expected, harmless): until stage 4 lands,
+sessions load BOTH the committed CLAUDE.md and the parent-level one —
+near-identical content; the parent copy adds the merged draft sections
+and the config-placement section. Skills resolve from the tracked
+.claude where it exists — same skill set either way.
+
+**Rollback** (stage 3 created only links + two dirs of links; committed
+config was never touched):
+
+    rm ~/git/ualib/agda-algebras/CLAUDE.md
+    rm -r ~/git/ualib/agda-algebras/.claude
+    rm ~/git/formalverification/agda-native-air/CLAUDE.md
+    rm -r ~/git/formalverification/agda-native-air/.claude
+    # (worktree .claude links and the exclude lines are harmless either way)
+
+**Afterwards**, once the merge in projects/agda-algebras/CLAUDE.md is
+confirmed faithful: delete the untracked
 `~/git/ualib/agda-algebras/master/CLAUDE-draft-additions.md`.
 
 ## Stage 4 — removal PRs (after the web decision)
