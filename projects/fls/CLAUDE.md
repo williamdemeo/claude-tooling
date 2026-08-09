@@ -43,6 +43,10 @@ Correctness over speed.
 
 ## Claude config for this project
 
-Everything lives in `~/git/IO/fls/.claude/` (skills, and settings via the
-main checkout's symlinked `.claude`). Project-specific skills belong there,
-not in `~/.claude/skills/`.
+Source of truth: the williamdemeo/claude-tooling repo (projects/fls/),
+symlinked into place — `~/git/IO/fls/CLAUDE.md` and the per-skill links
+under `~/git/IO/fls/.claude/skills/` point there. Add or edit skills in
+claude-tooling, then run `make install PROJECT=fls` there. Project skills
+belong in that repo, not in `~/.claude/skills/`.
+
+PROBE-MARKER: claude-tooling/fls

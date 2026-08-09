@@ -1,6 +1,6 @@
 ---
 name: agda-typecheck
-description: Typecheck Agda modules (.lagda.md / .agda) in via the project's Nix flake. Use after editing any Agda module to verify it compiles, and before declaring Agda work done. Covers the `nix develop` invocation, reading common Agda errors, and the project's Agda quality gate.  One caveat: if the user launches claude from inside the Nix shell, then you can drop the `nix develop --command` prefix from each of the command instructions described below.
+description: Typecheck Agda modules (.lagda.md / .agda) via the project's Nix flake. Use after editing any Agda module to verify it compiles, and before declaring Agda work done. Covers the `nix develop` invocation, reading common Agda errors, and the project's Agda quality gate.  One caveat: if the user launches claude from inside the Nix shell, then you can drop the `nix develop --command` prefix from each of the command instructions described below.
 ---
 
 # Typechecking Agda in Nix-based repositories

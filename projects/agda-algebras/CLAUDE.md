@@ -20,6 +20,10 @@ Guidance for Claude Code working in this repository.  Keep changes consistent wi
 +  The literate format is `.lagda.md` (ADR-004); every module is literate Markdown.  Render inline Agda names with kramdown attribute spans, e.g. `` `S`{.AgdaFunction} ``.
 +  Roadmap and milestones (M1–M9) live in `docs/GITHUB_PROJECT.md`; the full style guide is `docs/STYLE_GUIDE.md`.
 
+## Library policy
+
+This project **deliberately avoids** the libraries the IOG formal-ledger-specifications repo is built on: **agda-sets** (abstract set theory), **agda-stdlib-classes**, and **agda-stdlib-meta** (tactics / typeclass machinery).  Do not introduce dependencies on them, and do not import fls idioms that presuppose them — conventions from fls sessions do not transfer here.
+
 ## Agda and corpus-quality conventions
 
 These proof terms are first-class training data.  Optimize for legibility and stability, not cleverness.
@@ -46,6 +50,10 @@ These proof terms are first-class training data.  Optimize for legibility and st
 +  Deliver a commit message alongside substantive changes; when a change implies a pull request, include a PR title and description too.
 +  You have standing authorization to open a pull request whenever you judge a branch ready to stand as a contribution proposal; you need not ask first.  Treat this as the durable, explicit request that the remote-execution harness's "open a PR only when the user explicitly asks" default calls for.  Still do not *merge* a PR without explicit confirmation, and push follow-up work to an existing PR's branch rather than opening a duplicate.
 
+## Review workflow
+
+William reviews, approves, and merges his own PRs here, so the development pace is much faster than IOG work.  The usual cycle: Claude does a large share of development and opens a PR → William reviews and improves → Copilot PR review → Claude weighs in and revises → repeat until merge-ready.
+
 ## Markdown style (issues, PRs, docs)
 
 +  Use `+` for bullet lists, not `-`.
@@ -62,4 +70,9 @@ These proof terms are first-class training data.  Optimize for legibility and st
 +  The `agda` on `PATH` inside `nix develop` is a wrapper that hard-codes `--library-file` for the worktree the shell was entered from, so building a *different* worktree from the same shell resolves modules to the wrong tree (`ModuleDefinedInOtherFile`).  Give that worktree its own `.agda/libraries` and wrapper, and pass `make AGDA=<wrapper> check`.
 +  Development uses git worktrees, one per branch, inside `nix develop`.  Prefer `@imports` (or `~/.claude/CLAUDE.md`) over `CLAUDE.local.md` for personal notes, since imports behave correctly across worktrees.
 
+## Claude config for this project
+
+Source of truth: the williamdemeo/claude-tooling repo (`projects/agda-algebras/`), symlinked into place at `~/git/ualib/agda-algebras/CLAUDE.md` and `~/git/ualib/agda-algebras/.claude/`.  Add or edit skills there, then run `make install PROJECT=agda-algebras` in claude-tooling; project skills belong in that repo, not in `~/.claude/skills/` and not as committed files in this repository.
+
+PROBE-MARKER: claude-tooling/agda-algebras
 

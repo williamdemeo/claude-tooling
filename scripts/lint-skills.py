@@ -65,7 +65,7 @@ def parse_frontmatter(text: str):
 
 TRIGGER_CUES = re.compile(r"\b(use (this|when|whenever|after|before|it)|when |whenever |trigger|invoke)", re.I)
 PATH_RE = re.compile(r"(?:~|/home/williamdemeo)/[A-Za-z0-9._/@+-]+")
-SHA_RE = re.compile(r"\b(?=[0-9a-f]*[0-9])[0-9a-f]{12,40}\b")
+SHA_RE = re.compile(r"\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b")
 PRNUM_RE = re.compile(r"\b(?:PR|pull request|issue)\s*#\d+|\bpull/\d+\b", re.I)
 EXEMPT = "lint-skills: ok"
 

@@ -94,5 +94,5 @@ reshuffle = go O F P S
 ## Worked example
 
 `src/Ledger/Dijkstra/Specification/Ledger/Properties/PoV.lagda.md` in
-formal-ledger-specifications (commit 475280d7f, PR #1203): thirteen rearrangement
-lemmas converted, −133 lines, statements and chain structure unchanged.
+formal-ledger-specifications: thirteen rearrangement lemmas converted,
+−133 lines, statements and chain structure unchanged.
