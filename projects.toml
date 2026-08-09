@@ -1,0 +1,49 @@
+# projects.toml — the manifest driving install.sh / check / probe.
+#
+# Restricted TOML subset (parsed by plain awk during recovery — see
+# scripts/lib.sh): [section] headers, `key = "string"`, `key = ["a", "b"]`.
+# No '#' characters inside values.
+#
+# Per project:
+#   parent = project parent dir; holds the symlinked CLAUDE.md and the real
+#            .claude/ whose members link into this repo
+#   main   = main-checkout dir name under parent (fetch/pull/worktree-add
+#            happen there; settings + auto-memory resolve to it)
+#   mode   = "symlink"   — managed here, deployed by install.sh
+#            "committed" — Claude config committed IN that repo for its
+#                          consumers (product config); installer MUST NOT touch
+#
+# There is deliberately NO worktrees field: worktree enumeration always comes
+# from `git worktree list --porcelain` in the main checkout, which is the
+# source of truth no matter which container dirs worktrees live in (fls has
+# a dozen different ones).
+
+[meta]
+canonical_root = "~/git/williamdemeo/claude-tooling/main"
+
+[projects.fls]
+parent = "~/git/IO/fls"
+main   = "master"
+mode   = "symlink"
+
+[projects.agda-algebras]
+parent = "~/git/ualib/agda-algebras"
+main   = "master"          # a rename to main is pending upstream; update this line when it lands
+mode   = "symlink"
+
+[projects.agda-native-air]
+parent = "~/git/formalverification/agda-native-air"
+main   = "main"
+mode   = "symlink"
+
+[projects."williamdemeo.github.io"]
+parent = "~/git/williamdemeo/williamdemeo.github.io"
+main   = "main"
+mode   = "symlink"
+
+# Product-config repo: ships .claude/skills for ITS consumers (the template
+# users). Listed so tooling knows it exists; never touched by install.sh.
+[projects.github-project]
+parent = "~/git/williamdemeo/github-project"
+main   = "main"
+mode   = "committed"

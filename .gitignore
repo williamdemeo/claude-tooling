@@ -1,0 +1,5 @@
+# settings.local.json is machine-local Claude state; it can land in
+# projects/*/claude/ through the live symlinks and must never be committed.
+**/settings.local.json
+*.bak
+__pycache__/
