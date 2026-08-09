@@ -30,7 +30,7 @@ tier() { # tier <label> <claude-md> <skills-dir>
       printf '      %-34s %s\n' "$(basename "$skill")" "$(desc_of "$skill/SKILL.md")…"
     done
   fi
-  [ "$n" -eq 0 ] && printf '      (no skills yet)\n'
+  if [ "$n" -eq 0 ]; then printf '      (no skills yet)\n'; fi
 }
 
 tier "global → ~/.claude" "$ROOT/global/CLAUDE.md" "$ROOT/global/skills"
