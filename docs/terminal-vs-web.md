@@ -5,6 +5,45 @@ from interviewing William — it must not be invented. The questions below
 are seeded with what the migration work established empirically; replace
 this stub with the answers.
 
+## Research findings on skill distribution surfaces (2026-08-09)
+
+From the official docs (code.claude.com/docs: web-quickstart, cloud-environments,
+plugins, plugin-marketplaces, settings; support.claude.com articles
+12512180 and 13119606):
+
+- Web sessions use **"repo only" config** — committed CLAUDE.md and
+  .claude/settings.json load; committed `.claude/skills/` presumably loads
+  but is NOT explicitly documented (test it — experiment ii below).
+- **Organization Skills** (claude.ai → Organization settings → Skills;
+  Owner uploads a skill .zip) reach claude.ai chat/Cowork for all members.
+  Docs say they do NOT reach Claude Code — but the web UI's environment
+  configuration now shows a skills picker (Anthropic / organization /
+  partners), which the docs don't describe yet. UI beats stale docs:
+  verify empirically (experiment i).
+- **Plugin marketplaces**: any git repo with `.claude-plugin/marketplace.json`
+  can serve plugins that ship skills. `/plugin` is terminal-only; a
+  committed `.claude/settings.json` with `enabledPlugins` (+
+  `extraKnownMarketplaces`) may pre-activate plugins in web sessions —
+  partially documented, unverified for private marketplace repos (the
+  container needs credentials for a second repo).
+- **Cloud-environment setup scripts** (documented) run inside the web
+  container and CAN fetch skills into the container's `~/.claude/skills/`
+  — a candidate for giving fls web sessions skills without committing
+  anything to the IOG repo (needs the claude-tooling repo reachable from
+  the container: PAT in environment env-vars, or public repo).
+
+Pre-interview experiments only William can run (minutes each):
+
+  i.  In the web env-config skills picker: do IOG org-uploaded skills
+      appear? Is there an upload/add-custom path? Do personal
+      (Customize → Skills) uploads show up?
+  ii. Launch a web session on agda-native-air (committed skills present)
+      and ask it to list its available skills — confirms/refutes
+      "committed .claude/skills load on web".
+  iii. If fls-web matters: try a cloud-environment setup script that
+      clones claude-tooling (with a fine-grained PAT) — proves the
+      container-fetch path.
+
 ## What is already established (2026-08-09)
 
 - Web sessions clone the repo into a fresh container: they see ONLY

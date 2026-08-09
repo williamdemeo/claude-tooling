@@ -46,6 +46,15 @@ Recommendation: decide per repo after interview question 2
 (c); the kickoff itself anticipated air might deliberately keep a
 committed CLAUDE.md.
 
+Research note (2026-08-09, see docs/terminal-vs-web.md findings):
+committed-in-repo is the only FULLY verified way web sessions get skills
+today; claude.ai org-skill uploads target chat/Cowork (docs say not
+Claude Code, but the new web env-config skills picker is undocumented —
+verify empirically); cloud-environment setup scripts can verifiably
+fetch skills into the container, which could serve even fls web sessions
+without committing anything to the IOG repo. This tilts aa/air toward
+options (b)/(c)/(d) rather than (a).
+
 ## Stage 2 — fls (the only project whose live config has no other home)
 
     cd ~/git/williamdemeo/claude-tooling/main
