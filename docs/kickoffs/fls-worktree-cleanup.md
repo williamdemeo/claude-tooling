@@ -1,6 +1,7 @@
-<!-- DRAFT kickoff prompt. When approved, copy to
-     ~/claude-kickoff-prompts/kickoff-3-fls-worktree-cleanup.md and start a
-     fresh session with: Read and execute `~/claude-kickoff-prompts/kickoff-3-fls-worktree-cleanup.md` -->
+<!-- Versioned source of the deployed kickoff prompt
+     ~/claude-kickoff-prompts/kickoff-3-fls-worktree-cleanup.md
+     (deployed 2026-08-09, William's approval). Launch a fresh session with:
+     Read and execute `~/claude-kickoff-prompts/kickoff-3-fls-worktree-cleanup.md` -->
 
 # Kick-off: clean up the fls worktree forest
 

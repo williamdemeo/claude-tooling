@@ -81,10 +81,10 @@ and always skips checkouts where `.claude` is *tracked* content
 
 | project             | parent                              | mode      | status |
 |---------------------|-------------------------------------|-----------|--------|
-| fls                 | `~/git/IO/fls`                      | symlink   | absorbed; live migration pending (stage 2) |
+| fls                 | `~/git/IO/fls`                      | symlink   | **migrated (2026-08-09)** — live config is symlinks into this repo |
 | agda-algebras       | `~/git/ualib/agda-algebras`         | symlink   | absorbed; committed config still in repo (stage 3/4) |
 | agda-native-air     | `~/git/formalverification/agda-native-air` | symlink | absorbed; committed config still in repo (stage 3/4) |
-| williamdemeo.github.io | `~/git/williamdemeo/williamdemeo.github.io` | symlink | scaffolded; skills TBD |
+| williamdemeo.github.io | `~/git/williamdemeo/williamdemeo.github.io` | symlink | scaffolded; checkout confirmed; skills TBD |
 | github-project      | `~/git/williamdemeo/github-project` | committed | product config; installer never touches it |
 
 Migration stages, current state, and the exact commands per stage:

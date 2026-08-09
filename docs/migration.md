@@ -8,17 +8,20 @@ reports pending items as warnings, errors only for genuine breakage.
 
 | stage | scope | state |
 |-------|-------|-------|
-| 1 | repo skeleton + installer + `make check` on COPIES of all config | **done** (this repo; live locations untouched) |
-| 2 | fls: replace live parent files with symlinks | ready — awaiting yes |
+| 1 | repo skeleton + installer + `make check` on COPIES of all config | **done 2026-08-09** (live locations untouched) |
+| 2 | fls: replace live parent files with symlinks | **done 2026-08-09** — `install.sh --force fls`, 0 errors; `make check` green; live probe 14/14 (skills, marker, no leakage); backups at `~/.local/state/claude-tooling/backups/20260809-105419/` |
 | 3 | agda-algebras + air: install parent-level config alongside committed config | ready — awaiting yes; see the web-container conflict below |
-| 4 | removal PRs in agda-algebras + air | **blocked on a design decision** (below) |
+| 4 | removal PRs in agda-algebras + air | **deferred by William (2026-08-09) until the terminal-vs-web interview** (docs/terminal-vs-web.md) |
 | 5 | global: replace ~/.claude/CLAUDE.md + 2 skills with symlinks | ready — awaiting yes |
 
-Baseline check output today: fls 101/105 worktrees already linked, 3 with
-tracked `.claude` (old `claude/*` branches), exclude line present;
+Post-stage-2 state: fls 102/105 worktrees linked (3 old `claude/*`
+branches still carry tracked `.claude` — skipped by design), exclude line
+present, parent CLAUDE.md + all 4 skills are symlinks into this repo;
 agda-algebras 94 of 127 worktrees carry tracked `.claude`; air is a single
-fresh `main` checkout; website has 23 broken worktree registrations
-(moved out of the old MKDOCS path — `git worktree repair` or prune).
+fresh `main` checkout; website checkout confirmed by William
+(`~/git/williamdemeo/williamdemeo.github.io`), its 23 broken worktree
+registrations (moved out of the old MKDOCS path) still pending
+`git worktree repair` or prune.
 
 ## The web-container conflict (stage 4 decision)
 
