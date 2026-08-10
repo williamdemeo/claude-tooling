@@ -1,26 +1,37 @@
+<!-- File: README.md -->
+
 # claude-tooling
 
-The versioned **source of truth** for William's Claude Code configuration —
-global config plus per-project config, every project treated uniformly —
-with an installer that symlinks everything into place, and documentation of
+This repository contains the versioned *source of truth* for @williamdemeo's Claude
+Code configuration.
+
+It consists of a global config plus per-project configs, with every project treated
+uniformly.
+
+It contains an installer that symlinks everything into place, and documentation of
 the multi-project git + Claude workflows.
 
-Dotfiles-style: **this repo holds the files; the live locations are
-symlinks.** Catastrophe recovery is: fresh machine → clone → `make install`
-→ works (see [docs/recovery.md](docs/recovery.md)).
+**Dotfiles-style**.  This repo holds the files; the live locations are symlinks.
+
+**Catastrophe recovery**.  Fresh machine → clone → `make install`→ works (see [docs/recovery.md](docs/recovery.md)).
 
 ## The placement principle
 
-Claude config committed INSIDE a repo is reserved for config aimed at that
-repo's **consumers** (e.g. the `williamdemeo/github-project` template ships
-`.claude/skills` teaching its users the workflow — that's product config).
-Config that encodes **William's workflow** lives here, in claude-tooling,
-and reaches each project via symlinks.
+Claude config committed *inside* a repo is reserved for config aimed at that
+repo's *consumers*.
 
-One deliberate exception: config a repo's **remote sessions** need (Claude
-Code on the web clones the repo into a fresh container — symlinks and parent
-dirs don't exist there) can only work if committed in that repo. Whether a
-project keeps such config committed is a per-project decision recorded in
+For example, the `williamdemeo/github-project` template ships `.claude/skills`
+teaching its users the workflow; that's product config.
+
+Config that encodes @williamdemeo's workflow lives here, in the claude-tooling
+repository, and reaches each project via symlinks.
+
+**One deliberate exception**.  It seems that, at the time of this writing, if a
+config is needed by a repo's  *remote session* (e.g., a fresh Claude Code container
+in the web ui, where symlinks and parent dirs don't exist) that's only possible if
+the config is committed in that repo.
+
+Whether a project keeps such config committed is a per-project decision recorded in
 `projects.toml` (`mode = "committed"`), never a default.
 
 ## Layout
@@ -42,24 +53,25 @@ For each project `~/git/<org>/<proj>/` with a main checkout (`main/` or
 
     ~/git/<org>/<proj>/CLAUDE.md          → projects/<p>/CLAUDE.md   (symlink)
     ~/git/<org>/<proj>/.claude/           real dir (machine-local state stays out
-                                          of this repo — settings.local.json etc.)
+      |                                   of this repo; settings.local.json etc.)
       ├─ skills/<name>                    → projects/<p>/claude/skills/<name>
       └─ <member: hooks/, settings.json>  → projects/<p>/claude/<member>
     <main>/.claude and every worktree root's .claude
                                           → ~/git/<org>/<proj>/.claude
     plus a /.claude line in the shared .git/info/exclude
 
-Why this shape (each rule verified empirically — `make verify-discovery`
-re-checks them; see [docs/architecture.md](docs/architecture.md)):
+### Why this shape
 
-- **Skills** are discovered only from `.claude/skills/` at the session's
-  worktree root, so every worktree needs the root symlink; per-skill links
-  are followed.
-- **CLAUDE.md** ancestor traversal crosses the worktree boundary, so one
-  symlinked file at the parent covers the main checkout and all worktrees.
-- **settings/settings.local.json** resolve through worktrees to the main
-  checkout — whose `.claude` is the parent dir, kept a *real* directory so
-  local state never lands in this repo.
+Each rule is verified empirically: `make verify-discovery` re-checks them; see
+[docs/architecture.md](docs/architecture.md).
+
++  **Skills** are discovered only from `.claude/skills/` at the session's worktree
+   root, so every worktree needs the root symlink; per-skill links are followed.
++  **CLAUDE.md** ancestor traversal crosses the worktree boundary, so one symlinked
+   file at the parent covers the main checkout and all worktrees.
++  **settings/settings.local.json** resolve through worktrees to the main checkout,
+   whose `.claude` is the parent dir, kept a  *real* directory so local state never
+   lands in this repo.
 
 ## Usage
 
@@ -72,20 +84,19 @@ re-checks them; see [docs/architecture.md](docs/architecture.md)):
     scripts/link-worktrees.sh fls   # backfill .claude links over new worktrees
     scripts/add-project.sh org/name # scaffold the next project
 
-`install.sh` is idempotent, never replaces a real (non-symlink) file without
-`--force` (originals go to `~/.local/state/claude-tooling/backups/<ts>/…`),
-and always skips checkouts where `.claude` is *tracked* content
-(transitional repos, pre-removal-PR).
+`install.sh` is idempotent, never replaces a real (non-symlink) file without `--force`
+(originals go to `~/.local/state/claude-tooling/backups/<ts>/…`), and always skips
+checkouts where `.claude` is *tracked* content (transitional repos, pre-removal-PR).
 
 ## Projects
 
-| project             | parent                              | mode      | status |
-|---------------------|-------------------------------------|-----------|--------|
-| fls                 | `~/git/IO/fls`                      | symlink   | **migrated (2026-08-09)** — live config is symlinks into this repo |
-| agda-algebras       | `~/git/ualib/agda-algebras`         | symlink   | absorbed; committed config still in repo (stage 3/4) |
-| agda-native-air     | `~/git/formalverification/agda-native-air` | symlink | absorbed; committed config still in repo (stage 3/4) |
-| williamdemeo.github.io | `~/git/williamdemeo/williamdemeo.github.io` | symlink | scaffolded; checkout confirmed; skills TBD |
-| github-project      | `~/git/williamdemeo/github-project` | committed | product config; installer never touches it |
+| project                | parent                                      | mode      | status                                                            |
+|------------------------|---------------------------------------------|-----------|-------------------------------------------------------------------|
+| fls                    | `~/git/IO/fls`                              | symlink   | **migrated (2026-08-09)**; live config is symlinks into this repo |
+| agda-algebras          | `~/git/ualib/agda-algebras`                 | symlink   | absorbed; committed config still in repo (stage 3/4)              |
+| agda-native-air        | `~/git/formalverification/agda-native-air`  | symlink   | absorbed; committed config still in repo (stage 3/4)              |
+| williamdemeo.github.io | `~/git/williamdemeo/williamdemeo.github.io` | symlink   | scaffolded; checkout confirmed; skills TBD                        |
+| github-project         | `~/git/williamdemeo/github-project`         | committed | product config; installer never touches it                        |
 
-Migration stages, current state, and the exact commands per stage:
+Migration stages, current state, and the exact commands per stage are documented in
 [docs/migration.md](docs/migration.md).

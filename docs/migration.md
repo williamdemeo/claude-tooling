@@ -1,61 +1,77 @@
+<!-- File: docs/migration.md -->
+
 # Migration runbook and status
 
-Live state and the exact commands per stage. Every mutating stage needs
-William's explicit yes first. `make check` is safe at every point and
-reports pending items as warnings, errors only for genuine breakage.
+**Live state and the exact commands per stage**.
+
+Every mutating stage needs @williamdemeo's explicit yes first.
+
+`make check` is safe at every point and reports pending items as warnings, errors
+only for genuine breakage.
 
 ## Status (2026-08-09)
 
-| stage | scope | state |
-|-------|-------|-------|
-| 1 | repo skeleton + installer + `make check` on COPIES of all config | **done 2026-08-09** (live locations untouched) |
-| 2 | fls: replace live parent files with symlinks | **done 2026-08-09** — `install.sh --force fls`, 0 errors; `make check` green; live probe 14/14 (skills, marker, no leakage); backups at `~/.local/state/claude-tooling/backups/20260809-105419/` |
-| 3 | agda-algebras + air: install parent-level config alongside committed config | ready — awaiting yes; see the web-container conflict below |
-| 4 | removal PRs in agda-algebras + air | **deferred by William (2026-08-09) until the terminal-vs-web interview** (docs/terminal-vs-web.md) |
-| 5 | global: replace ~/.claude/CLAUDE.md + 2 skills with symlinks | ready — awaiting yes |
+| stage | scope                                                            | state                                          |
+|-------|------------------------------------------------------------------|------------------------------------------------|
+| 1     | repo skeleton + installer + `make check` on COPIES of all config | **done 2026-08-09** (live locations untouched) |
+| 2     | fls: replace live parent files with symlinks                     | **done 2026-08-09** `install.sh --force fls`, 0 errors; `make check` green; live probe 14/14; backups: `~/.local/state/claude-tooling/backups/20260809-105419/` |
+| 3     | agda-algebras + air: install parent config alongside committed   | ready: awaiting yes; see the web-container conflict below |
+| 4     | removal PRs in agda-algebras + air                               | **deferred until the terminal-vs-web interview** (docs/terminal-vs-web.md) |
+| 5     | global: replace ~/.claude/CLAUDE.md + 2 skills with symlinks     | ready: awaiting yes |
 
-Post-stage-2 state: fls 102/105 worktrees linked (3 old `claude/*`
-branches still carry tracked `.claude` — skipped by design), exclude line
-present, parent CLAUDE.md + all 4 skills are symlinks into this repo;
-agda-algebras 94 of 127 worktrees carry tracked `.claude`; air is a single
-fresh `main` checkout; website checkout confirmed by William
-(`~/git/williamdemeo/williamdemeo.github.io`), its 23 broken worktree
-registrations (moved out of the old MKDOCS path) still pending
-`git worktree repair` or prune.
+**Post-stage-2 state**.
+
++  **fls**.  102/105 worktrees linked (3 old `claude/*` branches still
+   carry tracked `.claude`; skipped by design), exclude line present, parent
+   CLAUDE.md + all 4 skills are symlinks into this repo; agda-algebras 94 of 127
+   worktrees carry tracked `.claude`;
+
++  **agda-native-air**.  A single fresh `main` checkout;
+
++  **williamdemeo.github.io**.  Checkout confirmed by William
+   (`~/git/williamdemeo/williamdemeo.github.io`), its 23 broken worktree registrations
+   (moved out of the old MKDOCS path) still pending `git worktree repair` or prune.
 
 ## The web-container conflict (stage 4 decision)
 
-Claude Code on the web sees only COMMITTED config. The agda-algebras and
-air `.claude/hooks/session-start.sh` exist specifically to provision web
-containers, and `claude/*` branches show real web usage. The kickoff's
-"absorb then remove" decision therefore breaks web sessions for those two
-repos in proportion to what gets removed. Options per repo:
+Claude Code on the web sees only *committed* config.  The agda-algebras and
+agda-native-air `.claude/hooks/session-start.sh` exist specifically to provision web
+containers, and `claude/*` branches show real web usage.  The kickoff's "absorb then
+remove" decision therefore breaks web sessions for those two repos in proportion to
+what gets removed.
 
-- **(a) remove everything** (kickoff's letter): web sessions run bare.
-- **(b) remove CLAUDE.md + skills, keep hooks + settings.json**: web
-  sessions keep a working toolchain but lose guidance/skills.
-- **(c) keep everything committed** (`mode = "committed"` in the
-  manifest): claude-tooling drops its copies; the repo stays the source
-  of truth for its own config (it *is* versioned there).
-- **(d) both worlds**: claude-tooling stays the source of truth and a
-  small sync script keeps the committed copies current (adds drift
-  tooling; only worth it if web usage of these repos is heavy).
+**Options per repo**. 
 
-Recommendation: decide per repo after interview question 2
-(docs/terminal-vs-web.md) — air looks like the strongest case for (b) or
-(c); the kickoff itself anticipated air might deliberately keep a
-committed CLAUDE.md.
++  **(a) remove everything** (kickoff's letter): web sessions run bare.
++  **(b) remove CLAUDE.md + skills, keep hooks + settings.json**: web sessions keep a
+   working toolchain but lose guidance/skills. 
++  **(c) keep everything committed** (`mode = "committed"` in the manifest):
+   claude-tooling drops its copies; the repo stays the source of truth for its own
+   config (it *is* versioned there).
++  **(d) both worlds**: claude-tooling stays the source of truth and a small sync
+   script keeps the committed copies current (adds drift tooling; only worth it if
+   web usage of these repos is heavy).
 
-Research note (2026-08-09, see docs/terminal-vs-web.md findings):
-committed-in-repo is the only FULLY verified way web sessions get skills
-today; claude.ai org-skill uploads target chat/Cowork (docs say not
-Claude Code, but the new web env-config skills picker is undocumented —
-verify empirically); cloud-environment setup scripts can verifiably
-fetch skills into the container, which could serve even fls web sessions
-without committing anything to the IOG repo. This tilts aa/air toward
-options (b)/(c)/(d) rather than (a).
+**Recommendation**. Decide per repo after interview question 2
+(docs/terminal-vs-web.md).
 
-## Stage 2 — fls (the only project whose live config has no other home)
+agda-native-air looks like the strongest case for (b) or (c); the kickoff itself
+anticipated agda-native-air might deliberately keep a committed CLAUDE.md.
+
+**Research note** (2026-08-09, see docs/terminal-vs-web.md findings).
+
+Committed-in-repo is the only *fully* verified way web sessions get skills today;
+claude.ai org-skill uploads target chat/Cowork (docs say not Claude Code, but the new
+web env-config skills picker is undocumented; verify empirically).
+
+Cloud-environment setup scripts can verifiably fetch skills into the container, which
+could serve even fls web sessions without committing anything to the IOG repo.
+
+This tilts aa/air toward options (b)/(c)/(d) rather than (a).
+
+## Stage 2: fls
+
+fls is the only project whose live config has no other home.
 
     cd ~/git/williamdemeo/claude-tooling/main
     # 1. preview the deltas the migration will make live:
@@ -70,21 +86,29 @@ options (b)/(c)/(d) rather than (a).
     make check PROJECT=fls        # every fls item ✓
     make probe PROJECT=fls        # live: 4 skills + marker, no leakage
 
-Rollback: for each path, `rm <link> && mv <backup>/<path> <path>`.
+**Rollback**.  For each path, `rm <link> && mv <backup>/<path> <path>`.
 
-Post-stage cleanup (William's call): `~/git/IO/fls/dot-claude/` is a stale
-pre-removal snapshot (old fls-specific agda-typecheck skill + the old
-session hook + settings.json). Archive or delete once stage 2 is green.
+**Post-stage cleanup**.
 
-## Stage 3 — agda-algebras and air (parent-level config, additive)
+`~/git/IO/fls/dot-claude/` is a stale pre-removal snapshot (old fls-specific
+agda-typecheck skill + the old session hook + settings.json).  Archive or delete once
+stage 2 is green.
 
-Manual runbook (William drives). Stage 3 REPLACES NOTHING: it only
-creates new symlinks and two small real dirs at the parent level, next to
-the still-committed config. All commands from
-`~/git/williamdemeo/claude-tooling/main`.
+## Stage 3: agda-algebras and agda-native-air
 
-**1. Review what will start loading** (the parent CLAUDE.md loads in every
-session under each project dir, in addition to the committed one):
+This is the parent-level config (additive).
+
+**Manual runbook** (driven by @williamdemeo).
+
+Stage 3 *replaces nothing*; it only creates new symlinks and two small real dirs at
+the parent level, next to the still-committed config.
+
+All commands are invoked from `~/git/williamdemeo/claude-tooling/main`.
+
+**1. Review what will start loading**.
+
+The parent `CLAUDE.md` loads in every session under each project dir, in addition to
+the committed one.
 
     diff -u ~/git/ualib/agda-algebras/master/CLAUDE.md projects/agda-algebras/CLAUDE.md
     #   expect ONLY additions: “Library policy”, “Review workflow”,

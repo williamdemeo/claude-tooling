@@ -22,7 +22,7 @@ Guidance for Claude Code working in this repository.  Keep changes consistent wi
 
 ## Library policy
 
-This project **deliberately avoids** the libraries the IOG formal-ledger-specifications repo is built on: **agda-sets** (abstract set theory), **agda-stdlib-classes**, and **agda-stdlib-meta** (tactics / typeclass machinery).  Do not introduce dependencies on them, and do not import fls idioms that presuppose them — conventions from fls sessions do not transfer here.
+This project *deliberately avoids* the libraries the IOG formal-ledger-specifications repo is built on: agda-sets (abstract set theory), agda-stdlib-classes, and agda-stdlib-meta (tactics / typeclass machinery).  Do not introduce dependencies on them unless explicitly directed or unless there is a clear justification for doing so; do not import fls idioms that presuppose them.  Conventions from fls sessions do not transfer here.
 
 ## Agda and corpus-quality conventions
 
@@ -72,7 +72,7 @@ William reviews, approves, and merges his own PRs here, so the development pace 
 
 ## Claude config for this project
 
-Source of truth: the williamdemeo/claude-tooling repo (`projects/agda-algebras/`), symlinked into place at `~/git/ualib/agda-algebras/CLAUDE.md` and `~/git/ualib/agda-algebras/.claude/`.  Add or edit skills there, then run `make install PROJECT=agda-algebras` in claude-tooling; project skills belong in that repo, not in `~/.claude/skills/` and not as committed files in this repository.
+**Source of truth**: the williamdemeo/claude-tooling repo (`projects/agda-algebras/`), symlinked into place at `~/git/ualib/agda-algebras/CLAUDE.md` and `~/git/ualib/agda-algebras/.claude/`.  Add or edit skills there, then run `make install PROJECT=agda-algebras` in claude-tooling; project skills belong in that repo, not in `~/.claude/skills/` and not as committed files in this repository.
 
 PROBE-MARKER: claude-tooling/agda-algebras
 

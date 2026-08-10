@@ -61,9 +61,9 @@ a nice side effect, not the goal; safety is the goal.
    is re-creatable; branch deletion is a SEPARATE approval from worktree
    removal.
 5. Other people's dirs (`carlos/`, `facundo/`, `heinrich/`, `tferariu/`,
-   `copilot/`, …) and every non-worktree dir in `~/git/IO/fls/`
+   `copilot/`, …) are IN SCOPE, but every non-worktree dir in `~/git/IO/fls/`
    (`master-old`, `master-new*`, `master-artifacts`, `legacy-latex`,
-   `ARCHIVE`, …) are OUT OF SCOPE unless William explicitly widens scope —
+   `ARCHIVE`, …) is OUT OF SCOPE unless William explicitly widens scope —
    list them with sizes as an appendix so he can decide separately.
 
 ## Procedure

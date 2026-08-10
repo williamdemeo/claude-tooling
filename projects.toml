@@ -1,22 +1,21 @@
 # projects.toml — the manifest driving install.sh / check / probe.
 #
-# Restricted TOML subset (parsed by plain awk during recovery — see
-# scripts/lib.sh): [section] headers, `key = "string"`, `key = ["a", "b"]`.
+# Restricted TOML subset (parsed by plain awk during recovery; see scripts/lib.sh):
+# [section] headers, `key = "string"`, `key = ["a", "b"]`.
 # No '#' characters inside values.
 #
 # Per project:
 #   parent = project parent dir; holds the symlinked CLAUDE.md and the real
-#            .claude/ whose members link into this repo
+#            .claude/ whose members link into this repo;
 #   main   = main-checkout dir name under parent (fetch/pull/worktree-add
-#            happen there; settings + auto-memory resolve to it)
-#   mode   = "symlink"   — managed here, deployed by install.sh
-#            "committed" — Claude config committed IN that repo for its
-#                          consumers (product config); installer MUST NOT touch
+#            happen there; settings + auto-memory resolve to it);
+#   mode   = "symlink"   -> managed here, deployed by install.sh;
+#            "committed" -> Claude config committed in that repo for its
+#                           consumers (product config); installer must not touch it.
 #
-# There is deliberately NO worktrees field: worktree enumeration always comes
+# There is deliberately no worktrees field: worktree enumeration always comes
 # from `git worktree list --porcelain` in the main checkout, which is the
-# source of truth no matter which container dirs worktrees live in (fls has
-# a dozen different ones).
+# source of truth no matter which container dirs worktrees live in.
 
 [meta]
 canonical_root = "~/git/williamdemeo/claude-tooling/main"
@@ -28,7 +27,7 @@ mode   = "symlink"
 
 [projects.agda-algebras]
 parent = "~/git/ualib/agda-algebras"
-main   = "master"          # a rename to main is pending upstream; update this line when it lands
+main   = "master"
 mode   = "symlink"
 
 [projects.agda-native-air]
@@ -41,8 +40,8 @@ parent = "~/git/williamdemeo/williamdemeo.github.io"
 main   = "main"
 mode   = "symlink"
 
-# Product-config repo: ships .claude/skills for ITS consumers (the template
-# users). Listed so tooling knows it exists; never touched by install.sh.
+# Product-config repo: ships .claude/skills for its consumers (the template users).
+# Listed so tooling knows it exists; never touched by install.sh.
 [projects.github-project]
 parent = "~/git/williamdemeo/github-project"
 main   = "main"
