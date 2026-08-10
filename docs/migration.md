@@ -90,9 +90,13 @@ fls is the only project whose live config has no other home.
 
 **Post-stage cleanup**.
 
-`~/git/IO/fls/dot-claude/` is a stale pre-removal snapshot (old fls-specific
-agda-typecheck skill + the old session hook + settings.json).  Archive or delete once
-stage 2 is green.
+Done 2026-08-09: `~/git/IO/fls/dot-claude/` is archived verbatim at
+`projects/fls/attic/dot-claude/` (see the attic README for what each file is, and why
+the hook matters for the future fls cloud-environment setup script).  Its
+`session-start.sh` was the newest revision anywhere — the copy tracked on branch
+`claude/agda-skill-and-session-hook` (local + origin) is ~13 lines older.  The
+original dir can now be deleted at William's leisure:
+`rm -r ~/git/IO/fls/dot-claude`.
 
 ## Stage 3: agda-algebras and agda-native-air
 
