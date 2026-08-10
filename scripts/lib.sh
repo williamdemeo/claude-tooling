@@ -16,16 +16,38 @@ else
   _c_grn=''; _c_red=''; _c_ylw=''; _c_blu=''; _c_off=''
 fi
 
-N_OK=0; N_WARN=0; N_ERR=0
+N_OK=0; N_WARN=0; N_ERR=0; N_PLAN=0; N_ATTN=0
+ATTN_LINES=()
 
+# Output markers:
+#   ✓  done / already correct
+#   →  planned action (dry-run only; the expected bulk of a dry-run)
+#   !  expected or transitional state (e.g. tracked .claude skipped)
+#   !! NEEDS ATTENTION — investigate before proceeding; recapped by summary()
+#   ✗  hard error (nonzero exit)
 say()  { printf '%s::%s %s\n' "$_c_blu" "$_c_off" "$*"; }
 ok()   { printf '  %s✓%s %s\n' "$_c_grn" "$_c_off" "$*"; N_OK=$((N_OK+1)); }
+plan() { printf '  %s→%s %s\n' "$_c_blu" "$_c_off" "$*"; N_PLAN=$((N_PLAN+1)); }
 warn() { printf '  %s!%s %s\n' "$_c_ylw" "$_c_off" "$*"; N_WARN=$((N_WARN+1)); }
+attn() { printf '  %s!!%s %s\n' "$_c_red" "$_c_off" "$*"; N_ATTN=$((N_ATTN+1)); ATTN_LINES+=("$*"); }
 fail() { printf '  %s✗%s %s\n' "$_c_red" "$_c_off" "$*"; N_ERR=$((N_ERR+1)); }
 die()  { fail "$*"; exit 1; }
 
-summary() { # summary <label>  — prints counts; returns 1 if any ✗
-  say "$1: $N_OK ok, $N_WARN warnings, $N_ERR errors"
+summary() { # summary <label>  — recaps !! items, prints counts; returns 1 if any ✗
+  local l counts
+  if [ "$N_ATTN" -gt 0 ]; then
+    printf '\n'
+    say "${_c_red}NEEDS ATTENTION${_c_off} ($N_ATTN) — investigate before proceeding:"
+    for l in "${ATTN_LINES[@]}"; do
+      printf '  %s!!%s %s\n' "$_c_red" "$_c_off" "$l"
+    done
+  fi
+  counts="$N_OK ok"
+  [ "$N_PLAN" -gt 0 ] && counts="$counts, $N_PLAN planned"
+  counts="$counts, $N_WARN warnings"
+  [ "$N_ATTN" -gt 0 ] && counts="$counts, $N_ATTN NEED ATTENTION"
+  counts="$counts, $N_ERR errors"
+  say "$1: $counts"
   [ "$N_ERR" -eq 0 ]
 }
 
@@ -100,7 +122,7 @@ ensure_link() {
     if [ "$cur" = "$target" ]; then
       ok "$desc — already linked"
     elif [ "${DRY_RUN:-0}" = 1 ]; then
-      warn "$desc — would re-point (now → $cur)"
+      plan "$desc — would re-point (now → $cur)"
     else
       rm "$link" && ln -s "$target" "$link"
       ok "$desc — re-pointed (was → $cur)"
@@ -108,18 +130,18 @@ ensure_link() {
   elif [ -e "$link" ]; then
     if [ "${FORCE:-0}" = 1 ]; then
       if [ "${DRY_RUN:-0}" = 1 ]; then
-        warn "$desc — would replace real file/dir (backup, then link)"
+        plan "$desc — would replace real file/dir (backup, then link)"
       else
         dest="$(backup_move "$link")"
         ln -s "$target" "$link"
         ok "$desc — replaced real file/dir (backup: $dest)"
       fi
     else
-      warn "$desc — real file/dir in the way; skipped (migrate it, or re-run with --force to backup+replace)"
+      attn "$desc — real file/dir in the way; skipped (migrate it, or re-run with --force to backup+replace)"
     fi
   else
     if [ "${DRY_RUN:-0}" = 1 ]; then
-      warn "$desc — would link → $target"
+      plan "$desc — would link → $target"
     else
       mkdir -p "$(dirname "$link")"
       ln -s "$target" "$link"
@@ -138,13 +160,13 @@ ensure_realdir() {
     cur="$(readlink "$dir")"
     case "$cur" in
       "$root"/*)
-        if [ "${DRY_RUN:-0}" = 1 ]; then warn "$desc — would replace repo-pointing symlink with real dir"
+        if [ "${DRY_RUN:-0}" = 1 ]; then plan "$desc — would replace repo-pointing symlink with real dir"
         else rm "$dir" && mkdir -p "$dir"; ok "$desc — replaced repo-pointing symlink with real dir"; fi ;;
       *)
         if [ "${FORCE:-0}" = 1 ] && [ "${DRY_RUN:-0}" != 1 ]; then
           rm "$dir" && mkdir -p "$dir"; ok "$desc — replaced foreign symlink (→ $cur) with real dir"
         else
-          warn "$desc — is a symlink (→ $cur); skipped (use --force)"
+          attn "$desc — is a symlink (→ $cur); skipped (use --force)"
         fi ;;
     esac
   elif [ -d "$dir" ]; then
@@ -152,7 +174,7 @@ ensure_realdir() {
   elif [ -e "$dir" ]; then
     fail "$desc — exists but is not a directory"
   else
-    if [ "${DRY_RUN:-0}" = 1 ]; then warn "$desc — would create dir"
+    if [ "${DRY_RUN:-0}" = 1 ]; then plan "$desc — would create dir"
     else mkdir -p "$dir"; ok "$desc — created"; fi
   fi
 }
@@ -174,7 +196,7 @@ ensure_exclude_line() {
   if [ -f "$file" ] && grep -qxF '/.claude' "$file"; then
     ok "exclude — /.claude already in $file"
   elif [ "${DRY_RUN:-0}" = 1 ]; then
-    warn "exclude — would append /.claude to $file"
+    plan "exclude — would append /.claude to $file"
   else
     mkdir -p "$common/info"
     printf '/.claude\n' >> "$file"

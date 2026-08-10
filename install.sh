@@ -22,6 +22,10 @@
 # Usage: install.sh [--dry-run] [--force] [global|<project> ...]
 #   No names = everything.  Exit 1 only on hard errors (warnings = pending
 #   migration steps, expected mid-migration).
+#
+# Output markers:  ✓ done   → planned (dry-run)   ! expected/transitional
+#   !! NEEDS ATTENTION (recapped at the end — the only lines you must read)
+#   ✗ hard error
 
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/scripts/lib.sh"

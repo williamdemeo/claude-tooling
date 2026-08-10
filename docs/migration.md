@@ -135,17 +135,18 @@ the committed one.
     diff -u  ~/git/formalverification/agda-native-air/main/.claude/settings.json projects/agda-native-air/claude/settings.json
     #   all six: expect NO output (byte-identical copies)
 
-**2. Dry-run and read every line:**
+**2. Dry-run, then read the recap at the bottom:**
 
     ./install.sh --dry-run agda-algebras agda-native-air
 
-Expected: “would link” for parent CLAUDE.md, per-skill links, hooks,
-settings.json; “would create dir” for .claude and .claude/skills; “would
-append /.claude” to each shared info/exclude; “would link” for worktrees
-WITHOUT tracked .claude; and the tracked-content skips (~94 in
-agda-algebras, incl. the master checkout itself; air’s single main
-checkout likewise). Anything else — especially “real file/dir in the
-way” — stop and investigate before proceeding.
+Expected: `→` planned lines (parent CLAUDE.md, per-skill links, hooks,
+settings.json, .claude dirs, exclude append, worktrees without tracked
+.claude) and `!` tracked-content skips (~94 in agda-algebras, incl. the
+master checkout itself; air’s single main checkout likewise).  You do NOT
+need to scan all of it: anything that needs investigation prints as red
+`!!` and is recapped verbatim in a **NEEDS ATTENTION** section at the end
+of the run.  Proceed only when that section is absent (or you have
+resolved each item).
 
 **3. Install (deliberately WITHOUT --force**, so any surprise is skipped
 and reported instead of replaced):
@@ -212,6 +213,12 @@ removed, or left.
 
     diff -u ~/.claude/CLAUDE.md global/CLAUDE.md
     #    expect: placement parenthetical now names this repo + PROBE-MARKER
+    for s in agda-ring-solver git-thematic-squash worktree-forest-cleanup; do
+      diff -ru ~/.claude/skills/$s global/skills/$s
+    done
+    #    expect: no output — unless a live skill was edited after its
+    #    absorption; if so, decide which side wins BEFORE --force (the
+    #    backup keeps the live version either way)
     ./install.sh --dry-run --force global
     ./install.sh --force global
     make check PROJECT=global ; make probe PROJECT=global
