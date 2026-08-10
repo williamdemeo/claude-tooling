@@ -40,9 +40,10 @@ Pre-interview experiments only William can run (minutes each):
   ii. Launch a web session on agda-native-air (committed skills present)
       and ask it to list its available skills — confirms/refutes
       "committed .claude/skills load on web".
-  iii. If fls-web matters: try a cloud-environment setup script that
-      clones claude-tooling (with a fine-grained PAT) — proves the
-      container-fetch path.
+  iii. If fls-web matters: wire `projects/fls/web-environment/
+      setup-script.sh` into the fls web environment (its README has the
+      exact steps: network allowlist, setup script, optional
+      CLAUDE_TOOLING_TOKEN) — proves the container-fetch path.
 
 ## What is already established (2026-08-09)
 

@@ -21,10 +21,10 @@ became the parent-level `.claude/` now managed by this repo.
    `github.com`.  NB the header says it also serves terminal sessions
    launched outside a Nix shell, but the `CLAUDE_CODE_REMOTE` guard makes
    it web-only as written.
-   **Why kept**: this is the seed for the planned fls cloud-environment
-   setup script (docs/terminal-vs-web.md, experiment iii) — the path that
-   gives fls web sessions a toolchain without committing anything to the
-   IOG repo.
+   **Why kept**: provenance.  The living, adapted version is
+   `../web-environment/setup-script.sh` (wired into the fls web
+   environment configuration, not the repo); this dir preserves the
+   original hook verbatim.
 +  `settings.json` — SessionStart wiring for the hook (same shape as the
    agda-algebras / agda-native-air ones).
 +  `skills/agda-typecheck/SKILL.md` — the ORIGINAL fls-specific typecheck
