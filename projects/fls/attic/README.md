@@ -30,3 +30,13 @@ became the parent-level `.claude/` now managed by this repo.
 +  `skills/agda-typecheck/SKILL.md` — the ORIGINAL fls-specific typecheck
    skill; identical to the branch copy, superseded by the generalized
    `projects/fls/claude/skills/agda-typecheck/` that is live today.
+
+## pr-1255-prefetch/ — the dropped half of fls PR #1255
+
+Byte-perfect copies (extracted from git, commit `fe966e4f0`) of
+`build-tools/nix/prefetch-devshell.sh` and `README-prefetch.md` as they
+stood at the head of PR IntersectMBO/formal-ledger-specifications#1255
+before the PR was trimmed to its flake-only commits (2026-08-10).  Their
+mechanics — `path:` flake ref for shallow clones, `--profile` gc-root,
+setup-script-phase caching — live on in `../web-environment/setup-script.sh`;
+these copies are provenance.
