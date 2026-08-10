@@ -80,6 +80,12 @@ if command -v nix >/dev/null 2>&1; then
 substituters = https://cache.iog.io https://cache.nixos.org/
 trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
 CONF
+  # Also pass flakes via NIX_CONFIG, PRESERVING anything the environment
+  # already set (a hand-rolled root single-user install needs
+  # `build-users-group =` and `sandbox = false` there; the official
+  # installer path above does not).  Mechanics from fls PR #1255.
+  export NIX_CONFIG="experimental-features = nix-command flakes${NIX_CONFIG:+
+$NIX_CONFIG}"
 
   # ----------------------------------------------------- 3. persist PATH --
   PROFILE_LINE=". \"$HOME/.nix-profile/etc/profile.d/nix.sh\""
@@ -94,11 +100,24 @@ CONF
   # ------------------------------------------------------- 4. pre-warm --
   cd "${CLAUDE_PROJECT_DIR:-$PWD}" || true
   if [ -f flake.nix ]; then
-    log "pre-warming 'nix develop' (can take a while on a cold cache)..."
-    if nix develop --command agda --version 2>&1 | sed 's/^/[nix-develop] /'; then
-      log "toolchain ready: 'nix develop --command agda <file>' works."
+    # Realise the dev shell with a persistent gc-root, referencing the
+    # flake as `path:` — web checkouts are SHALLOW clones, and Nix's git
+    # fetcher fails walking parent commits on them ("object not found");
+    # `path:` hashes the working tree directly.  The --profile doubles as
+    # a gc-root outside the working tree, so the realised paths survive
+    # until the session and `git status` stays clean.  (Both mechanics
+    # from fls PR #1255.)
+    GCROOT="${FLS_DEVSHELL_GCROOT:-$HOME/.cache/fls/devshell-profile}"
+    mkdir -p "$(dirname "$GCROOT")"
+    log "realising 'nix develop' shell (gc-root: $GCROOT; a cold cache can take a while)..."
+    if nix develop --profile "$GCROOT" "path:$PWD" --command true 2>&1 | sed 's/^/[nix-develop] /'; then
+      log "toolchain realised; verifying agda:"
+      nix develop --profile "$GCROOT" "path:$PWD" --command agda --version 2>&1 | sed 's/^/[agda] /' \
+        || log "WARNING: agda not runnable from the realised shell. Non-fatal."
     else
-      log "WARNING: 'nix develop' did not complete (often a blocked cache.iog.io). Non-fatal."
+      log "WARNING: 'nix develop' did not complete. If fetching flake inputs returned 403:"
+      log "         the github: flake-ref shorthand is blocked by the sandbox's GitHub proxy —"
+      log "         the git+https flake inputs from fls PR #1255 must be merged first. Non-fatal."
     fi
   else
     log "no flake.nix in ${PWD} — skipping pre-warm (is this the fls checkout?)"
