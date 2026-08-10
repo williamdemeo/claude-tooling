@@ -51,12 +51,20 @@ what gets removed.
 +  **(d) both worlds**: claude-tooling stays the source of truth and a small sync
    script keeps the committed copies current (adds drift tooling; only worth it if
    web usage of these repos is heavy).
++  **(e) remove everything + web-environment setup script** (gated on experiment iii,
+   docs/terminal-vs-web.md): like (a), but each repo's web environment runs a setup
+   script that provisions the toolchain and installs skills + CLAUDE.md into the
+   container's `~/.claude` from claude-tooling — the fls pattern
+   (`projects/fls/web-environment/`) applied to agda-algebras/agda-native-air.  If
+   the experiments succeed this dominates (a)–(d): one source of truth, nothing
+   committed, web sessions fully served.
 
 **Recommendation**. Decide per repo after interview question 2
-(docs/terminal-vs-web.md).
+(docs/terminal-vs-web.md) and the experiment results: **(e) if the experiments pass**,
+else per repo among (b)/(c)/(d).
 
-agda-native-air looks like the strongest case for (b) or (c); the kickoff itself
-anticipated agda-native-air might deliberately keep a committed CLAUDE.md.
+Absent (e), agda-native-air looks like the strongest case for (b) or (c); the kickoff
+itself anticipated agda-native-air might deliberately keep a committed CLAUDE.md.
 
 **Research note** (2026-08-09, see docs/terminal-vs-web.md findings).
 
