@@ -58,6 +58,23 @@ already shipped once; probe.sh's `comm`-based set logic is unreadable;
   (real TOML now; keep the no-'#'-in-values caveat only if you keep any
   line-based fallback, which you should not).
 
+## Quality bar (judged on maintainability, not just parity)
+
+- Typed throughout (mypy-clean annotations); dataclasses for the manifest
+  and per-item results; docstrings on every subcommand and non-obvious
+  function. William's house style: functional-leaning, total functions,
+  no hidden state, comprehensions where clearer than loops.
+- ONE small module; resist over-abstraction — the interface freeze and
+  the behaviors list below are the spec, not an invitation to build a
+  framework.
+- Add a small stdlib `unittest` suite for the pure logic (manifest
+  parsing, link classification, lint regexes, probe expectation sets)
+  plus a `make test` target (new targets are fine; documented ones are
+  frozen). Tests must NEVER touch live config — tmp fixtures only.
+- Suggested session config: a strong model (Opus-class or above) at high
+  or max effort — this is design-dense one-shot work worth the
+  deliberation.
+
 ## Behaviors that MUST survive (the bash encodes these; test for them)
 
 1. `ensure_link`: correct symlink → ok; wrong symlink → silently re-point
