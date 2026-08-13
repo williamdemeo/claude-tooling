@@ -16,7 +16,7 @@ only for genuine breakage.
 | 1     | repo skeleton + installer + `make check` on COPIES of all config | **done 2026-08-09** (live locations untouched) |
 | 2     | fls: replace live parent files with symlinks                     | **done 2026-08-09** `install.sh --force fls`, 0 errors; `make check` green; live probe 14/14; backups: `~/.local/state/claude-tooling/backups/20260809-105419/` |
 | 3     | agda-algebras + air: install parent config alongside committed   | **done 2026-08-13** (William drove it): install clean, `make check` green, live probes 16/16 both projects (after fixing a probe substring-matching bug); transitional tracked-`.claude` remains in 4 aa checkouts + air's main until stage 4 |
-| 4     | removal PRs in agda-algebras + air                               | **PRs open 2026-08-13, awaiting William's merge**: ualib/agda-algebras#532, formalverification/agda-native-air#90 (scope: CLAUDE.md + .claude; web sessions run bare until env setup scripts land — option (e)-lite) |
+| 4     | removal PRs in agda-algebras + air                               | **done 2026-08-13**: #532 + #90 merged; surviving untracked `settings.local.json` migrated from each main checkout into the parent `.claude/`; main checkouts linked; PR worktrees/branches retired; live probes 34/34 — skills now arrive via symlinks only, single CLAUDE.md. Residual: 3 old aa worktrees keep tracked `.claude` until their branches rebase or get cleaned (harmless). Web sessions run bare until env setup scripts land (option (e)-lite) |
 | 5     | global: replace ~/.claude/CLAUDE.md + 2 skills with symlinks     | ready: awaiting yes |
 
 **Post-stage-2 state**.
