@@ -15,7 +15,7 @@ only for genuine breakage.
 |-------|------------------------------------------------------------------|------------------------------------------------|
 | 1     | repo skeleton + installer + `make check` on COPIES of all config | **done 2026-08-09** (live locations untouched) |
 | 2     | fls: replace live parent files with symlinks                     | **done 2026-08-09** `install.sh --force fls`, 0 errors; `make check` green; live probe 14/14; backups: `~/.local/state/claude-tooling/backups/20260809-105419/` |
-| 3     | agda-algebras + air: install parent config alongside committed   | ready: awaiting yes; see the web-container conflict below |
+| 3     | agda-algebras + air: install parent config alongside committed   | **done 2026-08-13** (William drove it): install clean, `make check` green, live probes 16/16 both projects (after fixing a probe substring-matching bug); transitional tracked-`.claude` remains in 4 aa checkouts + air's main until stage 4 |
 | 4     | removal PRs in agda-algebras + air                               | **deferred until the terminal-vs-web interview** (docs/terminal-vs-web.md) |
 | 5     | global: replace ~/.claude/CLAUDE.md + 2 skills with symlinks     | ready: awaiting yes |
 
