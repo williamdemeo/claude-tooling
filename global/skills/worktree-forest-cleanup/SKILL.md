@@ -27,8 +27,8 @@ then **execution in approved batches**. The user makes every destructive decisio
 
 ## Repo relocation (stale backpointers, not stale content)
 
-If the repo's own container directory moved on disk (e.g. `~/git/x/OLD-NAME/…` →
-`~/git/x/NEW-NAME/…`), `git worktree list --porcelain` shows most entries as
+If the repo's own container directory moved on disk (e.g. `~/git/<org>/OLD-NAME/…` →
+`~/git/<org>/NEW-NAME/…`), `git worktree list --porcelain` shows most entries as
 `prunable` with `gitdir file points to non-existent location` — but the worktree
 directories themselves moved WITH the repo and are sitting intact under the NEW
 path, just with a stale `.git` back-pointer file (`cat <dir>/.git` shows the OLD
