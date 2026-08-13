@@ -53,8 +53,11 @@ state, all `@dataclass(frozen=True)`:
 `file_ops` wraps the filesystem in Results — `read_text`, `write_text`,
 `load_json`, `write_json`, `ls_dir`, `cp_file`, `cp_dir`, `rm_artifact`,
 `ensure_dir_exists`, … all return `Result[..., PipelineError]`. Do not
-call `open()` or `shutil` directly in pipeline code. `command_runner.
-run_command` wraps subprocess the same way (`CommandResult.success`).
+call `open()` or `shutil` directly in pipeline code. `command_runner.run_command`
+wraps subprocess the same way, returning
+`Result[subprocess.CompletedProcess, PipelineError]` — check
+`.returncode` on the unwrapped value (the `CommandResult` type in
+`pipeline_types` is not what it returns).
 `text_processing` holds pure text transforms (`slugify`, admonition and
 cross-ref processing).
 
