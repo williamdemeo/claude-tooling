@@ -65,14 +65,19 @@ check_location() { # <label> <cwd> <expect-skills> <absent-skills> <own-marker|-
   say "[$label] skills probe from $cwd"
   out="$(probe_session "$cwd" 'Output only the names of your available skills, one per line. No other text.')"
   calls=$((calls+1))
+  # Skill names are matched against WHOLE lines (after trimming whitespace
+  # and list bullets): one managed name can be a substring of another
+  # (agda-typecheck vs agda-typecheck-performance), so substring matching
+  # produces false leak reports.
+  out_names="$(printf '%s\n' "$out" | sed 's/^[[:space:]•*-]*//; s/[[:space:]]*$//')"
   while IFS= read -r s; do
     [ -n "$s" ] || continue
-    if printf '%s\n' "$out" | grep -qF "$s"; then ok "[$label] skill visible: $s"
+    if printf '%s\n' "$out_names" | grep -qxF "$s"; then ok "[$label] skill visible: $s"
     else fail "[$label] managed skill MISSING: $s"; fi
   done <<< "$expect"
   while IFS= read -r s; do
     [ -n "$s" ] || continue
-    if printf '%s\n' "$out" | grep -qF "$s"; then fail "[$label] foreign skill LEAKED: $s"
+    if printf '%s\n' "$out_names" | grep -qxF "$s"; then fail "[$label] foreign skill LEAKED: $s"
     else ok "[$label] foreign skill absent: $s"; fi
   done <<< "$absent"
 
