@@ -36,6 +36,7 @@ if sys.version_info < (3, 11):  # tomllib landed in 3.11; see docs/recovery.md
 
 import argparse
 import io
+import json
 import os
 import re
 import shutil
@@ -585,6 +586,15 @@ def claude_is_tracked(checkout: Path) -> bool:
     return bool(git(["ls-files", ".claude"], checkout).stdout.strip())
 
 
+def mcp_is_tracked(checkout: Path) -> bool:
+    """Is `.mcp.json` TRACKED content here?  Then it is never touched.
+
+    The same rule as `claude_is_tracked`, judged per member: a checkout may
+    track one and not the other, and only the tracked one is off-limits.
+    """
+    return bool(git(["ls-files", ".mcp.json"], checkout).stdout.strip())
+
+
 def is_git_checkout(path: Path) -> bool:
     return git(["rev-parse", "--git-dir"], path).returncode == 0
 
@@ -596,27 +606,36 @@ def tracked_files(root: Path) -> list[str]:
 # ------------------------------------------------------- worktree deployment --
 
 
-def ensure_exclude_line(main_checkout: Path, rep: Reporter, opts: Options) -> None:
-    """Idempotently add `/.claude` to the shared `.git/info/exclude`.
+def mcp_source(root: Path, project: Project) -> Path:
+    """The repo copy behind a project's managed `.mcp.json` — may not exist.
+
+    Its presence is the whole switch: a project without projects/<p>/mcp.json
+    gets no `.mcp.json` links anywhere, and nothing is scaffolded for it.
+    """
+    return root / "projects" / project.name / "mcp.json"
+
+
+def ensure_exclude_line(main_checkout: Path, line: str, rep: Reporter, opts: Options) -> None:
+    """Idempotently add `line` (e.g. `/.claude`) to the shared `.git/info/exclude`.
 
     One exclude file is shared by every linked worktree, and exclude only
     affects untracked files — so this is safe even while a repo still tracks
-    `.claude`.
+    the member.
     """
     common = git_common_dir(main_checkout)
     if common is None:
         rep.fail(f"exclude — cannot resolve git common dir for {main_checkout}")
         return
     path = common / "info" / "exclude"
-    if path.is_file() and "/.claude" in path.read_text(encoding="utf-8").splitlines():
-        rep.ok(f"exclude — /.claude already in {path}")
+    if path.is_file() and line in path.read_text(encoding="utf-8").splitlines():
+        rep.ok(f"exclude — {line} already in {path}")
     elif opts.dry_run:
-        rep.plan(f"exclude — would append /.claude to {path}")
+        rep.plan(f"exclude — would append {line} to {path}")
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
-            handle.write("/.claude\n")
-        rep.ok(f"exclude — appended /.claude to {path}")
+            handle.write(f"{line}\n")
+        rep.ok(f"exclude — appended {line} to {path}")
 
 
 def relative_label(path: Path, parent: Path) -> str:
@@ -626,17 +645,24 @@ def relative_label(path: Path, parent: Path) -> str:
     return text[len(prefix) :] if text.startswith(prefix) else text
 
 
-def link_worktrees_for(project: Project, rep: Reporter, opts: Options) -> None:
-    """Give the main checkout and every linked worktree its root `.claude` link.
+def link_worktrees_for(project: Project, root: Path, rep: Reporter, opts: Options) -> None:
+    """Give the main checkout and every linked worktree its root member links.
 
     Skills are discovered only from `.claude/skills/` at the session's worktree
-    root, which is why every worktree needs its own link.
+    root, and a project-root `.mcp.json` is read per checkout root — which is
+    why every worktree needs its own links.  The `.mcp.json` link (pointing at
+    the PARENT copy, which install establishes) exists only for projects with a
+    repo mcp.json; the tracked-content guards are judged per member, so a
+    transitional tracked-`.claude` checkout still gets its `.mcp.json` link.
     """
     main = project.main_checkout
     if not main.is_dir():
         rep.fail(f"worktrees — main checkout missing: {main}")
         return
-    ensure_exclude_line(main, rep, opts)
+    manage_mcp = mcp_source(root, project).is_file()
+    ensure_exclude_line(main, "/.claude", rep, opts)
+    if manage_mcp:
+        ensure_exclude_line(main, "/.mcp.json", rep, opts)
     for worktree in worktree_paths(main):
         label = relative_label(worktree, project.parent)
         if not worktree.is_dir():
@@ -644,7 +670,8 @@ def link_worktrees_for(project: Project, rep: Reporter, opts: Options) -> None:
                 f"worktree {label} — path missing on disk "
                 f"(stale entry; consider 'git worktree prune')"
             )
-        elif claude_is_tracked(worktree):
+            continue
+        if claude_is_tracked(worktree):
             rep.warn(
                 f"worktree {label} — .claude is TRACKED content here; skipped "
                 f"(re-link after the removal PR lands and this checkout updates)"
@@ -654,6 +681,21 @@ def link_worktrees_for(project: Project, rep: Reporter, opts: Options) -> None:
                 f"{project.parent}/.claude",
                 worktree / ".claude",
                 f"worktree {label}/.claude",
+                rep,
+                opts,
+            )
+        if not manage_mcp:
+            continue
+        if mcp_is_tracked(worktree):
+            rep.warn(
+                f"worktree {label} — .mcp.json is TRACKED content here; skipped "
+                f"(untrack it in that repo before managing it from this one)"
+            )
+        else:
+            ensure_link(
+                f"{project.parent}/.mcp.json",
+                worktree / ".mcp.json",
+                f"worktree {label}/.mcp.json",
                 rep,
                 opts,
             )
@@ -700,6 +742,14 @@ def install_project(project: Project, root: Path, rep: Reporter, opts: Options) 
         rep,
         opts,
     )
+    if mcp_source(root, project).is_file():
+        ensure_link(
+            f"{repo_dir}/mcp.json",
+            project.parent / ".mcp.json",
+            f"{project.name}/.mcp.json",
+            rep,
+            opts,
+        )
     if not ensure_realdir(project.parent / ".claude", f"{project.name}/.claude", root, rep, opts):
         return  # nothing below may write into (or through) that path
 
@@ -731,7 +781,7 @@ def install_project(project: Project, root: Path, rep: Reporter, opts: Options) 
             )
 
     if project.main_checkout.is_dir():
-        link_worktrees_for(project, rep, opts)
+        link_worktrees_for(project, root, rep, opts)
     else:
         rep.fail(f"main checkout missing: {project.main_checkout}")
 
@@ -793,7 +843,7 @@ def cmd_link_worktrees(args: argparse.Namespace, rep: Reporter) -> int:
         elif not project.main_checkout.is_dir():
             rep.fail(f"main checkout missing: {project.main_checkout}")
         else:
-            link_worktrees_for(project, rep, opts)
+            link_worktrees_for(project, root, rep, opts)
     return rep.summary("link-worktrees")
 
 
@@ -900,6 +950,42 @@ def lint_skill_dir(root: Path, skills_dir: Path, rep: Reporter) -> list[str]:
     ]
 
 
+def mcp_server_names(path: Path) -> list[str]:
+    """The server names a repo mcp.json registers — [] if it does not parse."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    return sorted(servers) if isinstance(servers, dict) else []
+
+
+def lint_mcp_json(root: Path, path: Path, rep: Reporter) -> None:
+    """A repo mcp.json must parse, register servers, and name only live paths.
+
+    The file deploys to every checkout root of its project, so a JSON error
+    here breaks MCP for every session at once — and a stale absolute path is
+    exactly the failure this design absorbs (a stale-pathed copy is what
+    started issue-managing these files).  `${VAR}` placeholders are skipped by
+    the path scan, like every other placeholder.
+    """
+    rel = path.relative_to(root).as_posix()
+    text = path.read_text(encoding="utf-8")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        rep.fail(f"{rel}: invalid JSON — {exc}")
+        return
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    if not isinstance(servers, dict) or not servers:
+        rep.fail(f"{rel}: no mcpServers entries — deploying it would register nothing")
+        return
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for stale in stale_paths(line):
+            rep.fail(f"{rel}:{lineno} stale path: {stale}")
+    rep.ok(f"{rel}: server(s): {', '.join(sorted(servers))}")
+
+
 def check_marker(path: Path, label: str, rep: Reporter, hint: str = "") -> None:
     """Warn unless this managed CLAUDE.md carries a VISIBLE marker line.
 
@@ -938,6 +1024,9 @@ def run_lint(root: Path, rep: Reporter) -> int:
                 rep,
                 " (make probe will skip its CLAUDE.md check)",
             )
+        mcp = project_dir / "mcp.json"
+        if mcp.is_file():
+            lint_mcp_json(root, mcp, rep)
 
     global_md = root / "global" / "CLAUDE.md"
     if not global_md.is_file():
@@ -1066,23 +1155,34 @@ def check_global_state(root: Path, rep: Reporter) -> None:
 
 @dataclass
 class WorktreeTally:
-    """Per-project worktree census — the shape of a project's deployment."""
+    """Per-project worktree census — the shape of a project's deployment.
+
+    `real` is used by the `.mcp.json` census only: a pre-migration real copy
+    at a worktree root, distinct from `absent` because the remedy differs
+    (install --force swaps it, with backup, rather than link-worktrees).
+    """
 
     linked: int = 0
     tracked: int = 0
     missing: int = 0
     absent: int = 0
+    real: int = 0
 
 
-def check_worktrees(project: Project, rep: Reporter) -> None:
+def check_worktrees(project: Project, root: Path, rep: Reporter) -> None:
     """Layer 3, worktrees: count states, and flag only genuinely bad links."""
     tally = WorktreeTally()
+    mcp_tally = WorktreeTally()
     expected = f"{project.parent}/.claude"
+    expected_mcp = f"{project.parent}/.mcp.json"
+    manage_mcp = mcp_source(root, project).is_file()
     for worktree in worktree_paths(project.main_checkout):
+        label = relative_label(worktree, project.parent)
         link = worktree / ".claude"
         if not worktree.is_dir():
             tally.missing += 1
-        elif claude_is_tracked(worktree):
+            continue
+        if claude_is_tracked(worktree):
             tally.tracked += 1
         elif not link.is_symlink():
             tally.absent += 1
@@ -1090,8 +1190,31 @@ def check_worktrees(project: Project, rep: Reporter) -> None:
             tally.linked += 1
         else:
             rep.fail(
-                f"{project.name} worktree {relative_label(worktree, project.parent)}: "
-                f"bad .claude link (→ {os.readlink(link)})"
+                f"{project.name} worktree {label}: bad .claude link (→ {os.readlink(link)})"
+            )
+        mcp_link = worktree / ".mcp.json"
+        if manage_mcp:
+            if mcp_is_tracked(worktree):
+                mcp_tally.tracked += 1
+            elif mcp_link.is_symlink():
+                if os.readlink(mcp_link) == expected_mcp and mcp_link.exists():
+                    mcp_tally.linked += 1
+                else:
+                    rep.fail(
+                        f"{project.name} worktree {label}: "
+                        f"bad .mcp.json link (→ {os.readlink(mcp_link)})"
+                    )
+            elif mcp_link.exists():
+                mcp_tally.real += 1
+            else:
+                mcp_tally.absent += 1
+        elif mcp_link.is_symlink() and os.readlink(mcp_link) == expected_mcp:
+            # Our deployment shape without its repo source: management was
+            # removed (or never landed) but the worktree link stayed behind.
+            rep.fail(
+                f"{project.name} worktree {label}: .mcp.json link without a repo "
+                f"source (no projects/{project.name}/mcp.json — remove the link "
+                f"or restore the file)"
             )
     rep.ok(f"{project.name} worktrees: {tally.linked} linked")
     if tally.tracked:
@@ -1109,21 +1232,39 @@ def check_worktrees(project: Project, rep: Reporter) -> None:
             f"{project.name} worktrees: {tally.missing} stale entries missing on disk "
             f"(git worktree prune)"
         )
+    if manage_mcp:
+        rep.ok(f"{project.name} worktrees: {mcp_tally.linked} with .mcp.json linked")
+        if mcp_tally.tracked:
+            rep.warn(
+                f"{project.name} worktrees: {mcp_tally.tracked} with tracked .mcp.json "
+                f"(never touched — untrack it in that repo first)"
+            )
+        if mcp_tally.real:
+            rep.warn(
+                f"{project.name} worktrees: {mcp_tally.real} with a real .mcp.json "
+                f"(pre-migration copy — install --force swaps it, with backup)"
+            )
+        if mcp_tally.absent:
+            rep.warn(
+                f"{project.name} worktrees: {mcp_tally.absent} without .mcp.json link "
+                f"(run scripts/link-worktrees.sh {project.name})"
+            )
 
     common = git_common_dir(project.main_checkout)
     exclude = (common / "info" / "exclude") if common else None
-    listed = (
-        exclude is not None
-        and exclude.is_file()
-        and "/.claude" in exclude.read_text(encoding="utf-8").splitlines()
+    exclude_lines = (
+        exclude.read_text(encoding="utf-8").splitlines()
+        if exclude is not None and exclude.is_file()
+        else []
     )
-    if listed:
-        rep.ok(f"{project.name}: /.claude present in shared info/exclude")
-    else:
-        rep.warn(
-            f"{project.name}: /.claude not in {common if common else ''}/info/exclude "
-            f"(install adds it)"
-        )
+    for line in ["/.claude"] + (["/.mcp.json"] if manage_mcp else []):
+        if line in exclude_lines:
+            rep.ok(f"{project.name}: {line} present in shared info/exclude")
+        else:
+            rep.warn(
+                f"{project.name}: {line} not in {common if common else ''}/info/exclude "
+                f"(install adds it)"
+            )
 
 
 def check_project_state(project: Project, root: Path, rep: Reporter) -> None:
@@ -1137,6 +1278,24 @@ def check_project_state(project: Project, root: Path, rep: Reporter) -> None:
         f"{project.name}/CLAUDE.md",
         rep,
     )
+
+    parent_mcp = project.parent / ".mcp.json"
+    if mcp_source(root, project).is_file():
+        classify_link(
+            f"{repo_dir}/mcp.json",
+            parent_mcp,
+            root,
+            f"{project.name}/.mcp.json",
+            rep,
+        )
+    elif parent_mcp.is_symlink() and points_into(os.readlink(parent_mcp), root):
+        # A real parent .mcp.json is unmanaged local config and none of our
+        # business; a repo-pointing symlink without its source is our own
+        # leftover and would silently serve nothing.
+        rep.fail(
+            f"{project.name}/.mcp.json → repo link without a source "
+            f"(no projects/{project.name}/mcp.json — remove the link or restore the file)"
+        )
 
     dot_claude = project.parent / ".claude"
     if dot_claude.is_symlink():
@@ -1168,7 +1327,7 @@ def check_project_state(project: Project, root: Path, rep: Reporter) -> None:
         rep.warn(f"{project.name}/.claude — absent (not installed yet)")
 
     if project.main_checkout.is_dir():
-        check_worktrees(project, rep)
+        check_worktrees(project, root, rep)
 
 
 def cmd_check(args: argparse.Namespace, rep: Reporter) -> int:
@@ -1206,13 +1365,22 @@ def skill_description(skill_md: Path) -> str:
     return ""
 
 
-def list_tier(label: str, claude_md: Path, skills_dir: Path, rep: Reporter) -> None:
-    """Print one tier: its CLAUDE.md, then each skill with its description."""
+def list_tier(
+    label: str,
+    claude_md: Path,
+    skills_dir: Path,
+    rep: Reporter,
+    mcp_json: Path | None = None,
+) -> None:
+    """Print one tier: its CLAUDE.md, mcp.json if any, then each skill."""
     rep.say(label)
     if claude_md.is_file():
         rep.ok(f"CLAUDE.md ({line_count(claude_md)} lines)")
     else:
         rep.warn("no CLAUDE.md")
+    if mcp_json is not None and mcp_json.is_file():
+        names = mcp_server_names(mcp_json)
+        rep.ok(f"mcp.json (servers: {', '.join(names) if names else 'NONE — unparseable?'})")
     skills = subdirs(skills_dir)
     for skill in skills:
         print(f"      {skill.name:<34} {skill_description(skill / 'SKILL.md')}…", file=rep.out)
@@ -1238,6 +1406,7 @@ def cmd_list(args: argparse.Namespace, rep: Reporter) -> int:
             repo_dir / "CLAUDE.md",
             repo_dir / "claude" / "skills",
             rep,
+            mcp_json=repo_dir / "mcp.json",
         )
     return 0
 
@@ -1665,8 +1834,13 @@ def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
     rep.say("next steps")
     print(f"  1. edit projects/{name}/CLAUDE.md", file=rep.out)
     print(f"  2. add skills under projects/{name}/claude/skills/<skill>/SKILL.md", file=rep.out)
-    print("  3. make check", file=rep.out)
-    print(f"  4. make install PROJECT={name}   (then: make probe PROJECT={name})", file=rep.out)
+    print(
+        f"  3. if the project registers MCP servers: add projects/{name}/mcp.json "
+        f"(install then links it to every checkout root)",
+        file=rep.out,
+    )
+    print("  4. make check", file=rep.out)
+    print(f"  5. make install PROJECT={name}   (then: make probe PROJECT={name})", file=rep.out)
     return rep.summary("add-project")
 
 
