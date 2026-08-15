@@ -660,6 +660,18 @@ def link_worktrees_for(project: Project, root: Path, rep: Reporter, opts: Option
         rep.fail(f"worktrees — main checkout missing: {main}")
         return
     manage_mcp = mcp_source(root, project).is_file()
+    parent_mcp = project.parent / ".mcp.json"
+    if manage_mcp and not parent_mcp.is_symlink() and parent_mcp.exists() and not opts.force:
+        # The parent site holds an unmanaged real file that install (without
+        # --force) just declined to touch.  Checkout links would RESOLVE to
+        # it and read as installed, deploying content this repo never saw.
+        # Under --force the parent is adopted (backed up) before this runs —
+        # and a --dry-run --force must predict that run, so force proceeds.
+        rep.warn(
+            "parent .mcp.json is an unmanaged real file — not linking checkout "
+            "roots to it (install --force adopts it first, with backup)"
+        )
+        manage_mcp = False
     ensure_exclude_line(main, "/.claude", rep, opts)
     if manage_mcp:
         ensure_exclude_line(main, "/.mcp.json", rep, opts)

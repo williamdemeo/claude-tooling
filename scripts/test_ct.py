@@ -1106,6 +1106,36 @@ class McpJsonDeploymentTest(DeploymentFixture):
         self.assertEqual(os.readlink(live), str(self.parent_mcp))
         self.assertNotIn("NEEDS ATTENTION", result.stdout)
 
+    def test_worktrees_are_never_linked_to_an_unmanaged_parent_file(self) -> None:
+        # Without --force a real parent .mcp.json survives ensure_link — and
+        # checkout links to it would RESOLVE, quietly deploying content this
+        # repo never saw while looking installed. They must be withheld.
+        write(self.parent_mcp, '{"mcpServers": {"local": {}}}\n')
+        result = self.invoke("install")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("!! demo/.mcp.json — real file/dir in the way", result.stdout)
+        self.assertIn("not linking checkout roots to it", result.stdout)
+        for checkout in ("main", "worktrees/wt1"):
+            live = self.parent / checkout / ".mcp.json"
+            self.assertFalse(live.is_symlink() or live.exists())
+        # --force adopts the parent file (backed up), then links normally.
+        result = self.invoke("install", "--force")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(os.readlink(self.parent_mcp), str(self.repo_mcp))
+        for checkout in ("main", "worktrees/wt1"):
+            self.assertEqual(
+                os.readlink(self.parent / checkout / ".mcp.json"), str(self.parent_mcp)
+            )
+
+    def test_dry_run_force_still_predicts_the_checkout_links(self) -> None:
+        # A --force run adopts the parent file before the worktree pass, so
+        # a --dry-run --force must plan the checkout links, not withhold them.
+        write(self.parent_mcp, '{"mcpServers": {"local": {}}}\n')
+        result = self.invoke("install", "--dry-run", "--force")
+        self.assertIn("demo/.mcp.json — would replace real file/dir", result.stdout)
+        self.assertIn("worktree main/.mcp.json — would link", result.stdout)
+        self.assertNotIn("not linking checkout roots", result.stdout)
+
     def test_committed_mode_is_never_touched(self) -> None:
         manifest = self.root / "projects.toml"
         manifest.write_text(
