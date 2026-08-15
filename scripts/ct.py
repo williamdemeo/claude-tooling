@@ -201,6 +201,18 @@ def selected(targets: Sequence[str], name: str) -> bool:
     return not targets or name in targets
 
 
+def validate_targets(targets: Sequence[str], known: Iterable[str]) -> None:
+    """Reject a target that names nothing, so a typo cannot look like success.
+
+    Without this, `check flss` filters everything out and reports green
+    without having checked the thing you asked about.
+    """
+    names = sorted(set(known))
+    unknown = [t for t in targets if t not in names]
+    if unknown:
+        raise Fatal(f"unknown target(s): {' '.join(unknown)} — known: {' '.join(names)}")
+
+
 # ------------------------------------------------------------------ manifest --
 
 
@@ -221,6 +233,18 @@ class Project:
     @property
     def is_symlink_mode(self) -> bool:
         return self.mode == "symlink"
+
+    @property
+    def parent_declared(self) -> bool:
+        """Does the stanza name an absolute parent directory?
+
+        A guard, not pedantry: `Path("")` is `.`, so a stanza with no
+        `parent` would otherwise deploy into whatever directory the command
+        happened to run from, and a relative one cannot produce the absolute
+        symlink targets this design requires.  Callers must refuse to act on
+        a project where this is false.
+        """
+        return bool(self.parent_raw) and self.parent.is_absolute()
 
 
 @dataclass(frozen=True)
@@ -447,11 +471,16 @@ def plan_realdir(directory: Path, root: Path) -> DirPlan:
     return DirPlan("create")
 
 
-def ensure_realdir(directory: Path, desc: str, root: Path, rep: Reporter, opts: Options) -> None:
+def ensure_realdir(directory: Path, desc: str, root: Path, rep: Reporter, opts: Options) -> bool:
     """Guarantee `directory` is a real directory, not a symlink.
 
     The parent `.claude` dirs must stay real so machine-local state Claude
     Code writes there (settings.local.json, …) never lands in this repo.
+
+    Returns whether a real directory is (or, under --dry-run, would be) in
+    place.  Callers MUST honor a false: linking into a foreign symlink we
+    just declined to touch would write into somebody else's directory, and
+    linking under a plain file raises.
     """
     plan = plan_realdir(directory, root)
     if plan.action == "repo_link":
@@ -461,23 +490,29 @@ def ensure_realdir(directory: Path, desc: str, root: Path, rep: Reporter, opts: 
             directory.unlink()
             directory.mkdir(parents=True, exist_ok=True)
             rep.ok(f"{desc} — replaced repo-pointing symlink with real dir")
-    elif plan.action == "foreign_link":
+        return True
+    if plan.action == "foreign_link":
         if opts.force and not opts.dry_run:
             directory.unlink()
             directory.mkdir(parents=True, exist_ok=True)
             rep.ok(f"{desc} — replaced foreign symlink (→ {plan.current}) with real dir")
         else:
             rep.attn(f"{desc} — is a symlink (→ {plan.current}); skipped (use --force)")
-    elif plan.action == "ok":
+        # A --force run establishes the dir, so a --dry-run --force still
+        # predicts the child links; without --force nothing below may run.
+        return opts.force
+    if plan.action == "ok":
         rep.ok(f"{desc} — real dir present")
-    elif plan.action == "not_a_dir":
+        return True
+    if plan.action == "not_a_dir":
         rep.fail(f"{desc} — exists but is not a directory")
-    else:  # "create"
-        if opts.dry_run:
-            rep.plan(f"{desc} — would create dir")
-        else:
-            directory.mkdir(parents=True, exist_ok=True)
-            rep.ok(f"{desc} — created")
+        return False
+    if opts.dry_run:  # "create"
+        rep.plan(f"{desc} — would create dir")
+    else:
+        directory.mkdir(parents=True, exist_ok=True)
+        rep.ok(f"{desc} — created")
+    return True
 
 
 # ----------------------------------------------------------------------- git --
@@ -607,7 +642,8 @@ def install_global(root: Path, rep: Reporter, opts: Options) -> None:
     live = home() / ".claude"
     rep.say("global → ~/.claude")
     ensure_link(f"{root}/global/CLAUDE.md", live / "CLAUDE.md", "~/.claude/CLAUDE.md", rep, opts)
-    ensure_realdir(live / "skills", "~/.claude/skills", root, rep, opts)
+    if not ensure_realdir(live / "skills", "~/.claude/skills", root, rep, opts):
+        return
     for skill in subdirs(root / "global" / "skills"):
         ensure_link(
             str(skill), live / "skills" / skill.name, f"~/.claude/skills/{skill.name}", rep, opts
@@ -622,6 +658,9 @@ def install_project(project: Project, root: Path, rep: Reporter, opts: Options) 
         return
 
     repo_dir = root / "projects" / project.name
+    if not project.parent_declared:
+        rep.fail(f"parent dir missing: {project.parent_raw}")
+        return
     if not project.parent.is_dir():
         rep.fail(f"parent dir missing: {project.parent}")
         return
@@ -636,14 +675,15 @@ def install_project(project: Project, root: Path, rep: Reporter, opts: Options) 
         rep,
         opts,
     )
-    ensure_realdir(project.parent / ".claude", f"{project.name}/.claude", root, rep, opts)
+    if not ensure_realdir(project.parent / ".claude", f"{project.name}/.claude", root, rep, opts):
+        return  # nothing below may write into (or through) that path
 
     for member in members(repo_dir / "claude"):
         if member.name == "skills":
-            ensure_realdir(
+            skills_dir_ok = ensure_realdir(
                 project.parent / ".claude/skills", f"{project.name}/.claude/skills", root, rep, opts
             )
-            for skill in subdirs(member):
+            for skill in subdirs(member) if skills_dir_ok else []:
                 ensure_link(
                     str(skill),
                     project.parent / ".claude/skills" / skill.name,
@@ -686,6 +726,7 @@ def cmd_install(args: argparse.Namespace, rep: Reporter) -> int:
     root = repo_root()
     manifest = load_manifest(root / "projects.toml")
     opts = Options.from_env(dry_run=args.dry_run, force=args.force)
+    validate_targets(args.targets, ("global", *manifest.names))
 
     warn_if_not_canonical(root, manifest, rep)
     if opts.dry_run:
@@ -722,6 +763,8 @@ def cmd_link_worktrees(args: argparse.Namespace, rep: Reporter) -> int:
                 "committed-mode project — worktrees carry their own tracked .claude; "
                 "nothing to do"
             )
+        elif not project.parent_declared:
+            rep.fail(f"no absolute parent in the manifest for {name}: {project.parent_raw}")
         elif not project.main_checkout.is_dir():
             rep.fail(f"main checkout missing: {project.main_checkout}")
         else:
@@ -950,6 +993,9 @@ def check_manifest(manifest: Manifest, root: Path, rep: Reporter) -> None:
     for project in manifest.projects:
         if project.mode not in ("symlink", "committed"):
             rep.fail(f"{project.name}: invalid mode '{project.mode}'")
+        if not project.parent_declared:
+            rep.fail(f"{project.name}: parent missing: {project.parent_raw}")
+            continue  # every path below would be relative to the cwd
         if not project.parent.is_dir():
             rep.fail(f"{project.name}: parent missing: {project.parent}")
         if not project.main_checkout.is_dir():
@@ -1110,6 +1156,7 @@ def cmd_check(args: argparse.Namespace, rep: Reporter) -> int:
     if not manifest_path.is_file():
         raise Fatal("projects.toml missing")
     manifest = load_manifest(manifest_path)
+    validate_targets(args.targets, ("global", *manifest.names))
 
     check_manifest(manifest, root, rep)
     check_hygiene(root, rep)
@@ -1118,7 +1165,7 @@ def cmd_check(args: argparse.Namespace, rep: Reporter) -> int:
     for project in manifest.projects:
         if not (selected(args.targets, project.name) and project.is_symlink_mode):
             continue
-        if project.parent.is_dir():
+        if project.parent_declared and project.parent.is_dir():
             check_project_state(project, root, rep)
     return rep.summary("check")
 
@@ -1203,8 +1250,30 @@ def foreign_skills(
     return sorted(set(all_project_skills) - set(own) - set(global_))
 
 
-def probe_session(cwd: Path, prompt: str, model: str) -> str:
-    """One real `claude -p` call in `cwd`, stdout+stderr, stdin closed."""
+@dataclass(frozen=True)
+class SessionResult:
+    """One `claude -p` call: its exit status and combined output."""
+
+    returncode: int
+    text: str
+
+    @property
+    def ok(self) -> bool:
+        return self.returncode == 0
+
+    @property
+    def first_line(self) -> str:
+        lines = self.text.splitlines()
+        return lines[0][:200] if lines else "(no output)"
+
+
+def probe_session(cwd: Path, prompt: str, model: str) -> SessionResult:
+    """One real `claude -p` call in `cwd`, stdout+stderr, stdin closed.
+
+    The status matters as much as the text: a failed or auth-expired session
+    prints an error message, and scoring that message as a probe answer would
+    let a broken run look like a verified one.
+    """
     try:
         proc = subprocess.run(
             ["claude", "--model", model, "-p", prompt],
@@ -1217,7 +1286,12 @@ def probe_session(cwd: Path, prompt: str, model: str) -> str:
         )
     except FileNotFoundError:
         raise Fatal("claude is not on PATH — probe needs a real CLI session") from None
-    return proc.stdout.rstrip("\n")
+    return SessionResult(proc.returncode, proc.stdout.rstrip("\n"))
+
+
+def session_failure(label: str, session: SessionResult) -> str:
+    """The ✗ line for a `claude -p` call that did not succeed."""
+    return f"[{label}] claude -p failed (exit {session.returncode}): {session.first_line}"
 
 
 def probe_location(location: ProbeLocation, model: str, rep: Reporter) -> int:
@@ -1227,7 +1301,11 @@ def probe_location(location: ProbeLocation, model: str, rep: Reporter) -> int:
         return 0
 
     rep.say(f"[{location.label}] skills probe from {location.cwd}")
-    out = probe_session(location.cwd, SKILLS_PROMPT, model)
+    session = probe_session(location.cwd, SKILLS_PROMPT, model)
+    if not session.ok:
+        rep.fail(session_failure(location.label, session))
+        return 1
+    out = session.text
     for skill in location.expect_skills:
         if skill in out:
             rep.ok(f"[{location.label}] skill visible: {skill}")
@@ -1240,7 +1318,11 @@ def probe_location(location: ProbeLocation, model: str, rep: Reporter) -> int:
             rep.ok(f"[{location.label}] foreign skill absent: {skill}")
 
     rep.say(f"[{location.label}] CLAUDE.md marker probe")
-    out = probe_session(location.cwd, MARKER_PROMPT, model)
+    session = probe_session(location.cwd, MARKER_PROMPT, model)
+    if not session.ok:
+        rep.fail(session_failure(location.label, session))
+        return 2
+    out = session.text
     live = location.live_claude_md
     if live and live.exists() and location.marker in live.read_text(encoding="utf-8"):
         if location.marker in out:
@@ -1309,6 +1391,7 @@ def cmd_probe(args: argparse.Namespace, rep: Reporter) -> int:
     root = repo_root()
     manifest = load_manifest(root / "projects.toml")
     model = os.environ.get("CLAUDE_PROBE_MODEL", "haiku")
+    validate_targets(args.targets, ("global", *manifest.names))
 
     rep.say(f"probe model: {model}   (each location = 2 claude -p calls)")
     locations = probe_locations(root, manifest, args.targets)
@@ -1387,19 +1470,24 @@ def build_discovery_fixture(scratch: Path) -> Path:
 def discovery_case(label: str, cwd: Path, model: str, rep: Reporter) -> None:
     """Ask one fixture session for its skills and its markers, and judge both."""
     rep.say(f"[{label}] asking for skill list …")
-    out = probe_session(cwd, SKILLS_PROMPT, model)
-    for line in out.split("\n"):
+    session = probe_session(cwd, SKILLS_PROMPT, model)
+    for line in session.text.split("\n"):
         print(f"      {line}", file=rep.out)
-    if FIXTURE_SKILL in out:
+    if not session.ok:
+        rep.fail(session_failure(label, session))
+        return
+    if FIXTURE_SKILL in session.text:
         rep.ok(f"[{label}] skill visible through per-skill symlink")
     else:
         rep.fail(f"[{label}] skill NOT visible through per-skill symlink")
 
     rep.say(f"[{label}] asking for CLAUDE.md marker …")
-    out = probe_session(cwd, MARKER_PROMPT, model)
-    for line in out.split("\n"):
+    session = probe_session(cwd, MARKER_PROMPT, model)
+    for line in session.text.split("\n"):
         print(f"      {line}", file=rep.out)
-    if FIXTURE_MARKER in out:
+    if not session.ok:
+        rep.fail(session_failure(label, session))
+    elif FIXTURE_MARKER in session.text:
         rep.ok(f"[{label}] symlinked parent CLAUDE.md loaded via ancestor traversal")
     else:
         rep.fail(f"[{label}] symlinked parent CLAUDE.md NOT loaded")
@@ -1449,6 +1537,23 @@ main   = "{main}"
 mode   = "symlink"
 """
 
+# A single plain path component: no separators, no leading dot, so it cannot
+# be `.`, `..`, or anything that walks out of projects/.
+COMPONENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def split_spec(spec: str) -> tuple[str, str]:
+    """`<org>/<name>` → (org, name), rejecting anything else.
+
+    Splitting on the first slash alone would accept `org/../../elsewhere`,
+    and `projects/<name>` would then escape the repo entirely; `org/a/b`
+    would quietly scaffold a nested directory and an unusable stanza.
+    """
+    parts = spec.split("/")
+    if len(parts) != 2 or not all(COMPONENT_RE.match(part) for part in parts):
+        raise Fatal(f"expected <org>/<name> — two plain names, no path separators: {spec}")
+    return parts[0], parts[1]
+
 
 def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
     """add-project — scaffold a new symlink-mode project and its manifest stanza."""
@@ -1456,9 +1561,9 @@ def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
     manifest_path = root / "projects.toml"
     manifest = load_manifest(manifest_path)
 
-    if "/" not in args.spec:
-        raise Fatal(f"expected <org>/<name>, got: {args.spec}")
-    org, name = args.spec.split("/", 1)
+    org, name = split_spec(args.spec)
+    if not COMPONENT_RE.match(args.main):
+        raise Fatal(f"--main must be a plain directory name: {args.main}")
     parent_raw = args.parent or f"~/git/{org}/{name}"
     repo_dir = root / "projects" / name
 
@@ -1467,8 +1572,8 @@ def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
         raise Fatal(f"project '{name}' already in {manifest_path}")
     if repo_dir.exists():
         raise Fatal(f"projects/{name} already exists in the repo")
-    if '"' in name or '"' in parent_raw or '"' in args.main:
-        raise Fatal("names and paths must not contain double quotes")
+    if '"' in parent_raw:
+        raise Fatal("the parent path must not contain double quotes")
 
     parent_abs = Path(expand_tilde(parent_raw))
     if not parent_abs.is_dir():

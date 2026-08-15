@@ -59,7 +59,14 @@ class ReporterTest(unittest.TestCase):
         rep.fail("broken")
         self.assertEqual(
             buffer.getvalue().splitlines(),
-            [":: header", "  ✓ fine", "  → would do", "  ! expected", "  !! look at me", "  ✗ broken"],
+            [
+                ":: header",
+                "  ✓ fine",
+                "  → would do",
+                "  ! expected",
+                "  !! look at me",
+                "  ✗ broken",
+            ],
         )
         self.assertEqual((rep.n_ok, rep.n_plan, rep.n_warn, rep.n_attn, rep.n_err), (1, 1, 1, 1, 1))
 
@@ -159,6 +166,35 @@ class ManifestTest(TempDirCase):
     def test_non_string_value_is_fatal(self) -> None:
         with self.assertRaises(ct.Fatal):
             self.load('[projects.p]\nparent = ["a", "b"]\n')
+
+    def test_a_stanza_without_a_parent_is_not_the_current_directory(self) -> None:
+        # Path("") is Path("."): nothing may act on such a project, or the
+        # installer would deploy into whatever directory it was run from.
+        project = self.load('[projects.p]\nmain = "main"\n').get("p")
+        assert project is not None
+        self.assertFalse(project.parent_declared)
+
+    def test_a_relative_parent_is_also_refused(self) -> None:
+        project = self.load('[projects.p]\nparent = "relative/path"\n').get("p")
+        assert project is not None
+        self.assertFalse(project.parent_declared)
+
+    def test_an_absolute_parent_is_declared(self) -> None:
+        project = self.load('[projects.p]\nparent = "/abs/path"\n').get("p")
+        assert project is not None
+        self.assertTrue(project.parent_declared)
+
+
+class ValidateTargetsTest(unittest.TestCase):
+    def test_known_targets_pass(self) -> None:
+        ct.validate_targets(["global", "fls"], ["global", "fls", "other"])
+        ct.validate_targets([], ["global"])  # no targets = everything
+
+    def test_a_typo_is_fatal_rather_than_a_silent_no_op(self) -> None:
+        with self.assertRaises(ct.Fatal) as caught:
+            ct.validate_targets(["flss"], ["global", "fls"])
+        self.assertIn("unknown target(s): flss", str(caught.exception))
+        self.assertIn("known: fls global", str(caught.exception))
 
 
 class SelectionTest(unittest.TestCase):
@@ -377,6 +413,32 @@ class EnsureRealdirTest(TempDirCase):
         self.assertEqual(self.plan(real).action, "ok")
         self.assertEqual(self.plan(self.tmp / "absent").action, "create")
 
+    def test_the_return_value_tells_the_caller_whether_to_go_on(self) -> None:
+        # False means: do not link anything underneath this path.
+        elsewhere = self.tmp / "elsewhere"
+        elsewhere.mkdir()
+        foreign = self.tmp / "foreign"
+        foreign.symlink_to(elsewhere)
+        file_in_the_way = write(self.tmp / "file", "x")
+        real = self.tmp / "real"
+        real.mkdir()
+        repo_link = self.tmp / "repo-link"
+        repo_link.symlink_to(self.root / "projects")
+
+        def established(path: Path, dry_run: bool = False, force: bool = False) -> bool:
+            rep, _ = capture()
+            options = ct.Options(dry_run=dry_run, force=force)
+            return ct.ensure_realdir(path, "d", self.root, rep, options)
+
+        self.assertFalse(established(foreign))
+        self.assertFalse(established(file_in_the_way))
+        self.assertTrue(established(real))
+        self.assertTrue(established(self.tmp / "absent", dry_run=True))
+        self.assertTrue(established(repo_link, dry_run=True))
+        # --force does establish it, so a --dry-run --force still predicts the
+        # child links it would then create.
+        self.assertTrue(established(foreign, dry_run=True, force=True))
+
 
 # ------------------------------------------------------------------- lint --
 
@@ -411,7 +473,8 @@ class LintRuleTest(TempDirCase):
         self.assertEqual(ct.stale_paths(f"see {real}."), [])
         self.assertEqual(ct.stale_paths("~/git/<org>/<name>/x"), [])
         self.assertEqual(ct.stale_paths("~/git/$PROJECT/x"), [])
-        self.assertEqual(ct.stale_paths("/home/williamdemeo/gone-forever/x"), ["/home/williamdemeo/gone-forever/x"])
+        gone = "/home/williamdemeo/gone-forever/x"
+        self.assertEqual(ct.stale_paths(gone), [gone])
 
     def test_exempt_line_is_skipped_entirely(self) -> None:
         rep, _ = capture()
@@ -431,7 +494,11 @@ class LintRepoTest(TempDirCase):
         body = "PROBE-MARKER: claude-tooling/global\n" if marker else "nothing\n"
         write(root / "global/CLAUDE.md", body)
         for tier, names in skills.items():
-            base = root / "global/skills" if tier == "global" else root / f"projects/{tier}/claude/skills"
+            base = (
+                root / "global/skills"
+                if tier == "global"
+                else root / f"projects/{tier}/claude/skills"
+            )
             if tier != "global":
                 write(
                     root / f"projects/{tier}/CLAUDE.md",
@@ -517,6 +584,52 @@ class ProbeExpectationTest(unittest.TestCase):
 
     def test_marker_shape(self) -> None:
         self.assertEqual(ct.marker_of("fls"), "PROBE-MARKER: claude-tooling/fls")
+
+
+class SessionResultTest(unittest.TestCase):
+    """A failed `claude -p` must never be scored as a probe answer."""
+
+    def test_nonzero_is_not_ok(self) -> None:
+        self.assertFalse(ct.SessionResult(1, "Invalid API key").ok)
+        self.assertTrue(ct.SessionResult(0, "agda-typecheck").ok)
+
+    def test_failure_line_quotes_the_status_and_first_line(self) -> None:
+        line = ct.session_failure("fls", ct.SessionResult(1, "Invalid API key\nmore"))
+        self.assertEqual(line, "[fls] claude -p failed (exit 1): Invalid API key")
+
+    def test_empty_output_still_produces_a_usable_line(self) -> None:
+        self.assertIn("(no output)", ct.session_failure("fls", ct.SessionResult(2, "")))
+
+    def test_a_failing_session_is_not_scored_even_if_it_mentions_a_skill(self) -> None:
+        # The error text contains the expected token; it must still fail.
+        location = ct.ProbeLocation(
+            label="fls",
+            cwd=Path.cwd(),
+            expect_skills=("agda-typecheck",),
+            absent_skills=(),
+            marker="PROBE-MARKER: claude-tooling/fls",
+            live_claude_md=None,
+            foreign_markers=(),
+        )
+        rep, buffer = capture()
+        failure = ct.SessionResult(1, "error: agda-typecheck config is invalid")
+        with mock.patch.object(ct, "probe_session", return_value=failure):
+            calls = ct.probe_location(location, "haiku", rep)
+        self.assertEqual(calls, 1)
+        self.assertEqual((rep.n_ok, rep.n_err), (0, 1))
+        self.assertIn("claude -p failed (exit 1)", buffer.getvalue())
+
+
+class SplitSpecTest(unittest.TestCase):
+    def test_accepts_two_plain_names_including_dotted_ones(self) -> None:
+        self.assertEqual(
+            ct.split_spec("williamdemeo/site.github.io"), ("williamdemeo", "site.github.io")
+        )
+
+    def test_rejects_traversal_and_extra_components(self) -> None:
+        for spec in ("org/../../outside", "org/a/b", "bare", "/leading", "org/", "org/.hidden"):
+            with self.assertRaises(ct.Fatal, msg=spec):
+                ct.split_spec(spec)
 
 
 class ProbeLocationTest(TempDirCase):
@@ -639,9 +752,10 @@ class DeploymentFixture(TempDirCase):
         self.git("commit", "-qm", "initial")
         self.git("worktree", "add", "-q", "-b", "wt1", "../worktrees/wt1")
 
-    def invoke(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def invoke(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(self.root / "scripts/ct.py"), *args],
+            cwd=cwd,
             capture_output=True,
             text=True,
             check=False,
@@ -737,7 +851,9 @@ class InstallEndToEndTest(DeploymentFixture):
         self.invoke("install")
         shutil.rmtree(self.parent / "worktrees/wt1")
         result = self.invoke("install")
-        self.assertIn("path missing on disk (stale entry; consider 'git worktree prune')", result.stdout)
+        self.assertIn(
+            "path missing on disk (stale entry; consider 'git worktree prune')", result.stdout
+        )
         self.assertEqual(result.returncode, 0)
 
     def test_orphaned_skill_link_is_reported_by_check(self) -> None:
@@ -755,7 +871,45 @@ class InstallEndToEndTest(DeploymentFixture):
             manifest.read_text().replace(str(self.root), "/somewhere/else"), encoding="utf-8"
         )
         result = self.invoke("install", "--dry-run")
-        self.assertIn("not the canonical checkout (/somewhere/else) — links will point HERE", result.stdout)
+        self.assertIn(
+            "not the canonical checkout (/somewhere/else) — links will point HERE",
+            result.stdout,
+        )
+
+    def test_a_parentless_stanza_never_deploys_into_the_current_directory(self) -> None:
+        manifest = self.root / "projects.toml"
+        manifest.write_text(
+            manifest.read_text().replace(f'parent = "{self.parent}"', 'parent = ""'),
+            encoding="utf-8",
+        )
+        cwd = self.tmp / "somewhere-else"
+        cwd.mkdir()
+        result = self.invoke("install", cwd=cwd)
+        self.assertIn("✗ parent dir missing:", result.stdout)
+        self.assertEqual(sorted(p.name for p in cwd.iterdir()), [])
+
+    def test_a_foreign_parent_claude_symlink_is_not_written_through(self) -> None:
+        elsewhere = self.tmp / "someone-elses-dir"
+        elsewhere.mkdir()
+        (self.parent / ".claude").symlink_to(elsewhere)
+        result = self.invoke("install")
+        self.assertIn("!! demo/.claude — is a symlink", result.stdout)
+        self.assertEqual(sorted(p.name for p in elsewhere.iterdir()), [])
+
+    def test_a_plain_file_where_parent_claude_belongs_fails_cleanly(self) -> None:
+        write(self.parent / ".claude", "not a directory\n")
+        result = self.invoke("install")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("✗ demo/.claude — exists but is not a directory", result.stdout)
+        self.assertNotIn("Traceback", result.stdout + result.stderr)
+        self.assertEqual((self.parent / ".claude").read_text(), "not a directory\n")
+
+    def test_a_mistyped_target_is_an_error_not_a_silent_success(self) -> None:
+        for command in ("install", "check", "probe"):
+            result = self.invoke(command, "demoo")
+            self.assertEqual(result.returncode, 1, command)
+            self.assertIn("unknown target(s): demoo", result.stdout)
+            self.assertIn("known: demo global", result.stdout)
 
     def test_settings_local_json_in_the_repo_is_never_linked(self) -> None:
         write(self.root / "projects/demo/claude/settings.local.json", "{}\n")
