@@ -46,6 +46,8 @@ Whether a project keeps such config committed is a per-project decision recorded
     global/                  ~/.claude tier: CLAUDE.md + skills/<name>/
     projects/<p>/CLAUDE.md   project instructions (symlinked to <parent>/CLAUDE.md)
     projects/<p>/claude/     project .claude members: skills/<name>/, hooks/, …
+    projects/<p>/mcp.json    optional: MCP server registrations, deployed as
+                             .mcp.json at the parent and every checkout root
     docs/                    architecture, workflows, migration runbook, recovery
 
 **Requirements**: git, a POSIX shell, and python3 ≥ 3.11 — stdlib only, no flake
@@ -61,13 +63,17 @@ For each project `~/git/<org>/<proj>/` with a main checkout (`main/` or
 `master/`) and worktrees beside it:
 
     ~/git/<org>/<proj>/CLAUDE.md          → projects/<p>/CLAUDE.md   (symlink)
+    ~/git/<org>/<proj>/.mcp.json          → projects/<p>/mcp.json    (only if that
+                                          repo file exists — presence-driven)
     ~/git/<org>/<proj>/.claude/           real dir (machine-local state stays out
       |                                   of this repo; settings.local.json etc.)
       ├─ skills/<name>                    → projects/<p>/claude/skills/<name>
       └─ <member: hooks/, settings.json>  → projects/<p>/claude/<member>
     <main>/.claude and every worktree root's .claude
                                           → ~/git/<org>/<proj>/.claude
-    plus a /.claude line in the shared .git/info/exclude
+    <main>/.mcp.json and every worktree root's .mcp.json
+                                          → ~/git/<org>/<proj>/.mcp.json
+    plus /.claude (and /.mcp.json when managed) in the shared .git/info/exclude
 
 ### Why this shape
 
@@ -81,6 +87,9 @@ Each rule is verified empirically: `make verify-discovery` re-checks them; see
 +  **settings/settings.local.json** resolve through worktrees to the main checkout,
    whose `.claude` is the parent dir, kept a  *real* directory so local state never
    lands in this repo.
++  **.mcp.json** is read per checkout root and follows symlink chains (checkout →
+   parent → this repo), so one repo copy serves every checkout; `${PWD}` in env
+   values expands to the launch directory, carrying per-checkout values.
 
 ## Usage
 

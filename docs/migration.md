@@ -206,9 +206,12 @@ not a hundred. Then:
 Side-finding, CORRECTED 2026-08-13: agda-algebras' `.mcp.json` (registers
 the `agda` MCP server from air) was never tracked in that repo — it is
 untracked, machine-local config that sat with a stale absolute path until
-William fixed it. Its durable home is this repo via per-worktree symlinks:
-claude-tooling issue #3, to be implemented in ct.py after the port (PR #2)
-merges. Until then it lives untracked in the master checkout only.
+William fixed it. RESOLVED by issue #3 (2026-08-14): its durable home is
+`projects/agda-algebras/mcp.json` here (air's is absorbed too), deployed
+per checkout root by install/link-worktrees like every other member. The
+old real copies in aa's worktrees 461/502/520 and air's worktrees show up
+in `check` as pre-migration copies until `install --force` swaps them (or
+those worktrees die).
 
 ## Stage 5 — global
 

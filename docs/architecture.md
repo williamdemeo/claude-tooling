@@ -51,6 +51,33 @@ repo's deployment shape):
    the fixture. Nothing in this design uses `@imports`; do not rely on
    them here without re-verifying.
 
+Verified 2026-08-14 on claude 2.1.221 (`.mcp.json` design inputs):
+
+8. **A project-root `.mcp.json` may be a SYMLINK** — a two-hop chain
+   (checkout root → parent → this repo, final target outside the
+   checkout) is discovered, parsed, approvable, and its servers LAUNCH,
+   identically to a real file. Discovery also works from a subdirectory
+   of the checkout.
+9. **`${VAR}` (and `${VAR:-default}`) expands in `.mcp.json` env values**
+   when the server launches — NOT at parse time (`claude mcp list` shows
+   the raw config for a pending server). `${CLAUDE_PROJECT_DIR}` is NOT
+   set at MCP launch; do not use it there.
+10. **MCP stdio servers spawn with cwd = the directory `claude` was
+    launched from**, not a normalized project root — and `${PWD}` expands
+    to that same directory. So a relative `command` and a `${PWD}` env
+    value both resolve per checkout, PROVIDED sessions start at the
+    checkout root (launching from a subdirectory shifts both).
+
+Fixture procedure for 8–10, zero-to-few tokens: a scratch git checkout
+whose `.mcp.json` (behind the parent→repo symlink chain) registers a
+dummy stdio server — a python script that appends its `os.getcwd()` and
+probe env vars to a log, then answers `initialize`. `claude mcp list`
+from the checkout proves discovery (the server is listed with its parsed
+command even while ⏸ pending approval, spending no tokens); to see the
+launch-layer facts, pre-approve it with `{"enableAllProjectMcpServers":
+true}` in the fixture's `.claude/settings.local.json` and run one tiny
+`claude -p` there, then read the log.
+
 ## The uniform per-project pattern
 
 For each project `~/git/<org>/<proj>/` (manifest: `parent`) with main
@@ -58,20 +85,30 @@ checkout `<parent>/<main>` and worktrees wherever `git worktree list` says
 they are:
 
     <parent>/CLAUDE.md              → <repo>/projects/<p>/CLAUDE.md
+    <parent>/.mcp.json              → <repo>/projects/<p>/mcp.json
+                                    (only if that repo file exists —
+                                    presence-driven, like every mcp piece)
     <parent>/.claude/               REAL directory
       skills/<name>                 → <repo>/projects/<p>/claude/skills/<name>
       <member: hooks/, settings.json>
                                     → <repo>/projects/<p>/claude/<member>
     <main>/.claude, <each worktree>/.claude
                                     → <parent>/.claude
-    <main .git>/info/exclude        gains a /.claude line (shared by all
-                                    linked worktrees; exclude only affects
+    <main>/.mcp.json, <each worktree>/.mcp.json
+                                    → <parent>/.mcp.json
+    <main .git>/info/exclude        gains a /.claude line — and /.mcp.json
+                                    when managed (shared by all linked
+                                    worktrees; exclude only affects
                                     untracked files, so it is safe to add
                                     even while a repo still tracks .claude)
 
 Rule 2 makes the parent CLAUDE.md cover the main checkout and every
-worktree; rule 1 is why every worktree root needs the `.claude` symlink;
-rule 3 is why the parent `.claude` must stay a REAL directory:
+worktree; rule 1 is why every worktree root needs the `.claude` symlink
+(and `.mcp.json` is read per checkout root, so it needs the same
+per-checkout link); rule 8 is why one repo mcp.json can serve every
+checkout through the two-hop chain, and rules 9–10 are what let a shared
+file carry per-checkout values (`${PWD}`) — see the agda-algebras entry.
+Rule 3 is why the parent `.claude` must stay a REAL directory:
 `settings.local.json` (and any other machine-local state Claude Code writes
 under the main checkout's `.claude`, which resolves here) must live outside
 this repo. The evidence case: agda-algebras' committed `.claude` acquired
@@ -100,6 +137,17 @@ whole-dir symlink that file would have landed in this repo.
 - **Tracked `.claude` is never touched**, even under `--force`: replacing
   tracked content would dirty a checkout. The installer skips and reports
   those worktrees (transitional state until a removal PR lands).
+- **`.mcp.json` is presence-driven and per-member guarded**: a project
+  gets the `.mcp.json` tier only if `projects/<p>/mcp.json` exists in this
+  repo — nothing is scaffolded, and `check` flags our deployment shape
+  wherever its repo source is missing. The tracked-content guard is judged
+  per member: a transitional tracked-`.claude` checkout still gets its
+  `.mcp.json` link, but a checkout that tracks `.mcp.json` itself is never
+  touched. agda-algebras shows why one shared file suffices even for
+  per-checkout config: its `env.AGDA_ALGEBRAS_ROOT` is `${PWD}` (rules
+  9–10), which resolves to each checkout root as long as sessions launch
+  there — the standing ritual anyway, and air's relative `command` path
+  has always had the same requirement.
 - **git + a POSIX shell + python3 ≥ 3.11 stdlib**, no flake, no pip: this
   repo is the thing reached for during recovery, so it must run before any
   toolchain exists. 3.11 is the floor because `tomllib` parses the
