@@ -614,12 +614,18 @@ class SecretScanTest(TempDirCase):
         shapes = [
             self.fake("ghp_", 36),
             self.fake("github_pat_", 22),
+            self.fake("glpat-", 20),
             self.fake("sk-ant-", 20),
             self.fake("sk-", 24),
             self.fake("AKIA", 16),
+            self.fake("AIza", 35),
             self.fake("xoxb-", 12),
+            self.fake("xapp-", 12),
+            self.fake("npm_", 36),
+            self.fake("eyJ", 10) + "." + self.fake("", 12, "B") + "." + self.fake("", 6, "C"),
             self.fake("-----BEGIN RSA PRIVATE ", 0) + self.fake("KEY-----", 0),
             "https://x-access-token:" + self.fake("", 12) + "@github.com/o/r.git",
+            "https://user:" + "abcd+ef!" + "@example.com",  # RFC 3986 sub-delims
         ]
         for index, shape in enumerate(shapes):
             write(root / f"f{index}.md", f"leaked: {shape}\n")
@@ -646,12 +652,38 @@ class SecretScanTest(TempDirCase):
         rep, out = self.scan(root)
         self.assertEqual(rep.n_err, 0, out)
 
-    def test_binary_files_are_skipped(self) -> None:
+    def test_a_stray_binary_byte_does_not_hide_an_ascii_token(self) -> None:
+        # Decoding is by replacement, never strict: one invalid byte in an
+        # otherwise-text file must not exempt the whole file from the gate.
         root = self.tmp / "r"
         root.mkdir(parents=True)
         (root / "blob.bin").write_bytes(b"\xff\xfe" + self.fake("ghp_", 36).encode())
         rep, out = self.scan(root)
-        self.assertEqual(rep.n_err, 0, out)
+        self.assertEqual(rep.n_err, 1, out)
+        self.assertIn("blob.bin", out)
+
+    def test_a_symlink_target_string_is_scanned_not_dereferenced(self) -> None:
+        # A commit stores the symlink's TARGET STRING as the blob content;
+        # is_file() alone would drop this broken link and never see it.
+        root = self.tmp / "r"
+        root.mkdir(parents=True)
+        (root / "sneaky").symlink_to(self.fake("ghp_", 36))
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 1, out)
+        self.assertIn("sneaky (symlink target)", out)
+
+    def test_staged_content_differing_from_the_worktree_is_scanned(self) -> None:
+        # A token staged and then wiped from the worktree copy still rides
+        # into the next commit; the gate must read the staged blob too.
+        root = self.tmp / "r"
+        write(root / "clean.md", "nothing\n")
+        subprocess.run(["git", "init", "-q", root], check=True, capture_output=True)
+        write(root / "hook.sh", f"TOKEN={self.fake('ghp_', 36)}\n")
+        subprocess.run(["git", "-C", root, "add", "."], check=True, capture_output=True)
+        write(root / "hook.sh", "TOKEN=redacted\n")
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 1, out)
+        self.assertIn("hook.sh (staged):1", out)
 
     def test_untracked_files_are_scanned_but_ignored_files_are_not(self) -> None:
         # The scope is "everything a commit could reach": an absorbed-but-

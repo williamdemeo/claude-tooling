@@ -820,10 +820,15 @@ SECRET_RES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("api key (sk-…)", re.compile(r"\bsk-(?!ant-)[A-Za-z0-9_-]{20,}\b")),
     ("aws access key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
     ("google api key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
-    ("slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
+    ("slack token", re.compile(r"\b(?:xox[baprs]|xapp)-[A-Za-z0-9-]{10,}\b")),
     ("npm token", re.compile(r"\bnpm_[A-Za-z0-9]{36,}\b")),
     ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
-    ("credentials in URL", re.compile(r"://[A-Za-z0-9._%-]+:[A-Za-z0-9._%-]{4,}@")),
+    # Userinfo classes cover RFC 3986 unreserved + sub-delims + pct-encoding;
+    # `{`/`}` stay excluded so a `${TOKEN_VAR}` reference can never match.
+    (
+        "credentials in URL",
+        re.compile(r"://[A-Za-z0-9._~%!$&'()*+,;=-]+:[A-Za-z0-9._~%!$&'()*+,;=-]{4,}@"),
+    ),
     ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b")),
 )
 
@@ -940,13 +945,64 @@ def candidate_files(root: Path) -> list[str]:
     """
     result = git(["ls-files", "--cached", "--others", "--exclude-standard"], root)
     if result.returncode == 0:
-        return [f for f in result.stdout.splitlines() if (root / f).is_file()]
+        # Symlinks stay in: a commit stores the target STRING as the blob,
+        # and is_file() alone would drop broken links entirely.
+        return [
+            f
+            for f in result.stdout.splitlines()
+            if (root / f).is_file() or (root / f).is_symlink()
+        ]
     found = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d != ".git"]
         for name in filenames:
             found.append((Path(dirpath) / name).relative_to(root).as_posix())
+        for name in dirnames:  # walk does not descend symlinked dirs; list them
+            if (Path(dirpath) / name).is_symlink():
+                found.append((Path(dirpath) / name).relative_to(root).as_posix())
     return sorted(found)
+
+
+def scan_text(rel: str, text: str, rep: Reporter) -> int:
+    """Scan one file's (or blob's) text; report and count secret shapes.
+
+    Matches are MASKED to 10 characters — the lint must never repeat a
+    credential into logs. A `lint-skills: ok` on the line exempts it.
+    """
+    hits = 0
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if EXEMPT in line:
+            continue
+        for kind, pattern in SECRET_RES:
+            match = pattern.search(line)
+            if match:
+                token = match.group(0)
+                rep.fail(f"{rel}:{lineno} {kind} shape: {token[:10]}… ({len(token)} chars)")
+                hits += 1
+    return hits
+
+
+def staged_texts(root: Path) -> dict[str, str]:
+    """Staged contents that differ from the worktree copy (or lack one).
+
+    `git ls-files` yields paths but the scan reads worktree bytes — a token
+    staged and then wiped from the worktree copy would still ride into the
+    next commit unseen. These are the bytes `git commit` would actually
+    take for such paths. Empty outside a git checkout.
+    """
+    differing = git(["diff", "--name-only"], root)  # index vs worktree
+    if differing.returncode != 0:
+        return {}
+    texts: dict[str, str] = {}
+    for rel in differing.stdout.splitlines():
+        # Not the git() helper: staged blobs can hold non-UTF-8 bytes, and
+        # text=True would raise where replacement must keep ASCII scannable.
+        show = subprocess.run(
+            ["git", "-C", str(root), "show", f":{rel}"], capture_output=True, check=False
+        )
+        if show.returncode == 0:
+            texts[rel] = show.stdout.decode("utf-8", errors="replace")
+    return texts
 
 
 def scan_secrets(root: Path, rep: Reporter) -> None:
@@ -954,27 +1010,25 @@ def scan_secrets(root: Path, rep: Reporter) -> None:
 
     The pre-public gate: token shapes (SECRET_RES) are errors wherever they
     appear, so no absorption or edit can leak a live credential into the
-    repo. Matches are MASKED in the report — the lint must not repeat a
-    secret into logs. A `lint-skills: ok` on the line exempts it.
+    repo. Three sources, each separately commit-reachable: file contents
+    (decoded with replacement — one stray non-UTF-8 byte must not hide an
+    ASCII token), symlink TARGET strings (the commit stores the string, not
+    the file behind it), and staged blobs that differ from the worktree.
     """
     files = candidate_files(root)
     hits = 0
     for rel in files:
+        path = root / rel
+        if path.is_symlink():
+            hits += scan_text(f"{rel} (symlink target)", os.readlink(path), rep)
+            continue
         try:
-            text = (root / rel).read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue  # binary or unreadable — not judgeable as text
-        for lineno, line in enumerate(text.splitlines(), start=1):
-            if EXEMPT in line:
-                continue
-            for kind, pattern in SECRET_RES:
-                match = pattern.search(line)
-                if match:
-                    token = match.group(0)
-                    rep.fail(
-                        f"{rel}:{lineno} {kind} shape: {token[:10]}… ({len(token)} chars)"
-                    )
-                    hits += 1
+            raw = path.read_bytes()
+        except OSError:
+            continue  # unreadable — nothing a scan could judge
+        hits += scan_text(rel, raw.decode("utf-8", errors="replace"), rep)
+    for rel, text in sorted(staged_texts(root).items()):
+        hits += scan_text(f"{rel} (staged)", text, rep)
     if hits == 0:
         rep.ok(f"no secret-shaped strings in {len(files)} scannable file(s)")
 
