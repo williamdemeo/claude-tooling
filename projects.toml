@@ -1,8 +1,9 @@
 # projects.toml — the manifest driving install.sh / check / probe.
 #
-# Restricted TOML subset (parsed by plain awk during recovery; see scripts/lib.sh):
-# [section] headers, `key = "string"`, `key = ["a", "b"]`.
-# No '#' characters inside values.
+# Plain TOML, parsed by Python's stdlib `tomllib` (see scripts/ct.py) — no
+# subset caveats: quoted keys, '#' inside values and inline comments all work.
+# (Until the Python port it was a restricted subset a bespoke awk parser could
+# read; that restriction is gone.)
 #
 # Per project:
 #   parent = project parent dir; holds the symlinked CLAUDE.md and the real

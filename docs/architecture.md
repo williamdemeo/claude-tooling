@@ -100,14 +100,22 @@ whole-dir symlink that file would have landed in this repo.
 - **Tracked `.claude` is never touched**, even under `--force`: replacing
   tracked content would dirty a checkout. The installer skips and reports
   those worktrees (transitional state until a removal PR lands).
-- **bash + coreutils + awk (+ python3-stdlib for lint only)**, no flake:
-  this repo is the thing reached for during recovery, so it must run
-  before any toolchain exists. The manifest is a restricted TOML subset
-  for the same reason (see the header comment in `projects.toml`).
+- **git + a POSIX shell + python3 ≥ 3.11 stdlib**, no flake, no pip: this
+  repo is the thing reached for during recovery, so it must run before any
+  toolchain exists. 3.11 is the floor because `tomllib` parses the
+  manifest — which is therefore plain TOML with no subset caveats.
+- **One module, `scripts/ct.py`, with subcommands**; `install.sh` and the
+  `scripts/*.sh` names are two-line shims into it, so every documented
+  command still works verbatim. Ported from ~900 lines of bash: `set -e`'s
+  function-return semantics had already shipped one real bug, `probe.sh`'s
+  `comm`-based set arithmetic was unreadable, and the awk TOML-subset
+  parser was the price of having no real one. The no-dependencies rule is
+  unchanged — it was never a pro-bash rule. `make test` runs the unit
+  suite (tmp fixtures only; it never touches live config).
 
 ## The manifest
 
-`projects.toml` — see its header comment for the format. One stanza per
+`projects.toml` — plain TOML; see its header comment. One stanza per
 project: `parent`, `main`, `mode` (`symlink` | `committed`). `[meta]
 canonical_root` anchors the warning above. `scripts/add-project.sh
 <org>/<name>` scaffolds a new stanza plus the `projects/<name>/` skeleton.

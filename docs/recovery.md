@@ -1,11 +1,14 @@
 # Recovery runbook: fresh machine → working Claude setup
 
-This repo must work with bash + coreutils + awk (+ python3 for the lint) —
-no flake, no package manager steps — precisely because it is the thing you
-reach for during recovery.
+This repo must work with git, a POSIX shell, and python3 ≥ 3.11 (stdlib
+only) — no flake, no package manager steps — precisely because it is the
+thing you reach for during recovery. All the logic is `scripts/ct.py`; the
+`*.sh` entry points are two-line shims into it. 3.11 is the floor because
+`tomllib` parses `projects.toml`.
 
 1. **Install Claude Code and log in** (`claude` on PATH; `claude
-   --version` sanity check). Not managed here.
+   --version` sanity check). Not managed here. Check the interpreter in the
+   same breath: `python3 --version` must report 3.11 or newer.
 2. **Restore the layout contract.** Clone this repo to its canonical path:
 
         git clone git@github.com:williamdemeo/claude-tooling.git \
