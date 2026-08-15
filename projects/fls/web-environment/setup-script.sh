@@ -15,7 +15,10 @@
 #      (cache.iog.io + cache.nixos.org, with trusted keys)
 #   3. persist PATH for the rest of the session
 #   4. pre-warm `nix develop` so typechecking is fast
-#   5. OPTIONAL: if CLAUDE_TOOLING_TOKEN is set, fetch williamdemeo/
+#   5. set William's git identity and silence Claude Code's commit/PR
+#      attribution in the container (the authorship standing order:
+#      commits are authored by William, never by an AI identity)
+#   6. OPTIONAL: if CLAUDE_TOOLING_TOKEN is set, fetch williamdemeo/
 #      claude-tooling and install the global + fls skills and CLAUDE.md
 #      into the container's ~/.claude (never into the repo working tree,
 #      so nothing can leak into a commit or PR)
@@ -126,7 +129,30 @@ else
   log "nix unavailable; toolchain steps skipped."
 fi
 
-# ----------------------------------- 5. optional: William's Claude config --
+# ------------------------------------------ 5. authorship + attribution --
+# The authorship standing order (claude-tooling global/CLAUDE.md): commits
+# from this container are authored by William, with no AI author/co-author
+# metadata. Aligns the container's git identity and Claude Code's
+# attribution settings; runs even in toolchain-only setups.
+git config --global user.name "William DeMeo" 2>/dev/null || true
+git config --global user.email "williamdemeo@gmail.com" 2>/dev/null || true
+python3 - <<'PY' 2>/dev/null && log "git identity + attribution settings configured" \
+  || log "WARNING: could not write attribution settings (python3 missing?). Non-fatal."
+import json, os
+path = os.path.expanduser("~/.claude/settings.json")
+os.makedirs(os.path.dirname(path), exist_ok=True)
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+except (FileNotFoundError, ValueError):
+    cfg = {}
+cfg["attribution"] = {"commit": "", "pr": "", "sessionUrl": False}
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PY
+
+# ----------------------------------- 6. optional: William's Claude config --
 # Installs into the container's ~/.claude ONLY — never into the repo working
 # tree, so nothing can end up in a commit or PR.
 if [ -n "${CLAUDE_TOOLING_TOKEN:-}" ]; then

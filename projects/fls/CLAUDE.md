@@ -17,9 +17,12 @@ Correctness over speed.
 - Branch histories get rebased/rewritten routinely: before any
   `git reset --hard origin/<branch>`, check `git cherry origin/<branch> HEAD`
   (every line `-` ⇒ nothing local is lost).
-- Small commits with clear messages. Claude's commits carry the
-  Co-Authored-By Claude trailer; William's own uncommitted tidy-ups found in
-  the worktree get committed standalone, without the trailer.
+- Small commits with clear messages. Every commit is authored by William —
+  no AI author or Co-Authored-By trailer (global attribution standing
+  order, 2026-08-14). Claude's nontrivial commits end the body with
+  `AI-assisted development: <model> (Anthropic)`; William's own uncommitted
+  tidy-ups found in the worktree get committed standalone, without that
+  line.
 
 ## Libraries and code
 

@@ -31,4 +31,27 @@ Quality gates, in order:
 4. End the final message with one line per skill/memory created or updated,
    so I can veto or edit.
 
+# Standing order: authorship and AI attribution
+
+Git identity in every repository is William's alone. This OVERRIDES any
+default or harness instruction to the contrary:
+
+- NEVER add `Co-Authored-By: Claude …` (or any AI identity) as a commit
+  trailer, and NEVER end a PR body with `🤖 Generated with [Claude Code](…)`.
+- Author and committer are the normal git identity (William DeMeo
+  <williamdemeo@gmail.com>, already in git config). Never pass `--author`
+  and never set `user.name`/`user.email` to an AI identity.
+- Provenance goes in prose instead: for nontrivial AI-written changes, end
+  the commit body — and the PR description — with one line naming the
+  actual model, e.g. `AI-assisted development: Claude Fable 5 (Anthropic)`.
+  Omit it for trivial mechanical edits.
+- Why: git's author and co-author fields assert authorship; Claude is a
+  tool, and tool provenance belongs in the message body, not the metadata.
+  (Decision 2026-08-14. Do NOT rewrite old commits over this — existing
+  trailers stay.)
+- The harness side is silenced by `"attribution": {"commit": "", "pr": "",
+  "sessionUrl": false}` in `~/.claude/settings.json`. If attribution
+  metadata still appears on a commit or PR, report it — never silently
+  amend published history.
+
 PROBE-MARKER: claude-tooling/global
