@@ -37,14 +37,23 @@ Whether a project keeps such config committed is a per-project decision recorded
 ## Layout
 
     projects.toml            manifest: one entry per project (parent dir, main
-                             checkout, mode) — drives every script
-    install.sh               deploy all symlinks (idempotent, --dry-run, --force)
-    Makefile                 install / check / probe / list / verify-discovery
-    scripts/                 shared lib + link-worktrees, add-project, lint, probe
+                             checkout, mode) — drives every command
+    scripts/ct.py            the implementation: install / link-worktrees / check /
+                             list / lint / probe / verify-discovery / add-project
+    install.sh, scripts/*.sh two-line shims into the matching ct.py subcommand
+    scripts/test_ct.py       unit suite (`make test`); tmp fixtures only
+    Makefile                 install / check / test / probe / list / verify-discovery
     global/                  ~/.claude tier: CLAUDE.md + skills/<name>/
     projects/<p>/CLAUDE.md   project instructions (symlinked to <parent>/CLAUDE.md)
     projects/<p>/claude/     project .claude members: skills/<name>/, hooks/, …
     docs/                    architecture, workflows, migration runbook, recovery
+
+**Requirements**: git, a POSIX shell, and python3 ≥ 3.11 — stdlib only, no flake
+and no `pip install`, because this repo has to work on a bare machine (see
+[docs/recovery.md](docs/recovery.md)). 3.11 is the floor because `tomllib` parses
+the manifest. GNU make (and the bash its recipes run under) is an everyday
+convenience, not a requirement: every Makefile target is a one-line call into
+`scripts/ct.py`, and the recovery runbook uses the `sh` shims directly.
 
 ## The uniform per-project pattern
 
@@ -79,6 +88,7 @@ Each rule is verified empirically: `make verify-discovery` re-checks them; see
     make install DRY_RUN=1          # show what would change
     make install FORCE=1            # may replace real files (backed up first)
     make check                      # static verification, zero tokens
+    make test                       # unit tests for the tooling (tmp fixtures)
     make probe                      # live claude -p matrix (costs tokens, opt-in)
     make list                       # skill inventory by tier
     scripts/link-worktrees.sh fls   # backfill .claude links over new worktrees

@@ -56,14 +56,19 @@ OLD=<pre-swap-sha>
 FILES="install.sh scripts/lib.sh scripts/check.sh"      # every file you overwrite
 for f in $FILES; do git show "$OLD:$f" > "$f"; done
 ./parity.sh
-git checkout -- $FILES                                  # by NAME, never a directory
+git checkout -- install.sh scripts/check.sh   # only paths the current commit tracks
+rm scripts/lib.sh                             # paths it DELETED came back untracked
+git status                                    # must end clean
 ```
 
-**Commit your new work before you do this**, and restore by explicit filename.
-`git checkout -- scripts/` throws away every *uncommitted* change in that
-directory — including the fixes you are trying to verify. Restoring a file
-that the current commit deletes leaves it untracked, so `rm` those explicitly
-afterwards and confirm with `git status`.
+**Commit your new work before you do this**, and clean up in two moves, by
+explicit filename. `git checkout -- scripts/` throws away every *uncommitted*
+change in that directory — including the fixes you are trying to verify. And
+`git checkout --` can only restore paths the current commit still tracks:
+give it a file the swap deleted (here `scripts/lib.sh`) and it errors on the
+unmatched pathspec without restoring anything — those files reappear
+*untracked* from the `git show` step and need an explicit `rm`. `git status`
+must end clean, or the next parity run compares against leftovers.
 
 ## Reading a diff that is genuinely yours
 
