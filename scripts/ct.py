@@ -36,7 +36,6 @@ if sys.version_info < (3, 11):  # tomllib landed in 3.11; see docs/recovery.md
 
 import argparse
 import io
-import json
 import os
 import re
 import shutil
@@ -287,12 +286,17 @@ MODES = ("symlink", "committed")
 def _project(name: str, body: object, path: Path) -> Project:
     """One validated stanza.
 
-    `mode` and `main` are validated HERE, at load, because not every command
-    runs `check`'s layers: a typo'd mode would otherwise fall through
-    `== "committed"` and be *managed*, and a `main` with separators would
-    escape the parent through `Path` joining.
+    `name`, `mode` and `main` are validated HERE, at load, because not every
+    command runs `check`'s layers: a typo'd mode would otherwise fall through
+    `== "committed"` and be *managed*, and a name or main with separators
+    would escape the repo / the parent through `Path` joining (TOML quoted
+    keys make `[projects."/tmp"]` perfectly parseable).
     """
     where = f"{path}: [projects.{name}]"
+    if name == "global":
+        raise Fatal(f"{where}: 'global' is the reserved global-tier target")
+    if not COMPONENT_RE.match(name):
+        raise Fatal(f"{where}: project names must be plain directory names, not '{name}'")
     table = _table(body, where)
     parent_raw = _string(table, "parent", "", name)
     main = _string(table, "main", "main", name)
@@ -1421,7 +1425,17 @@ def cmd_probe(args: argparse.Namespace, rep: Reporter) -> int:
     root = repo_root()
     manifest = load_manifest(root / "projects.toml")
     model = os.environ.get("CLAUDE_PROBE_MODEL", "haiku")
-    validate_targets(args.targets, ("global", *manifest.names))
+    # Only symlink-mode projects have a deployment to probe. Accepting a
+    # committed-mode target would filter it out and report a green
+    # "0 ok, 0 errors" without having verified anything.
+    probeable = ("global", *(p.name for p in manifest.projects if p.is_symlink_mode))
+    committed = [t for t in args.targets if t in manifest.names and t not in probeable]
+    if committed:
+        raise Fatal(
+            f"committed-mode project(s) — config lives in their own repos, "
+            f"nothing managed here to probe: {' '.join(committed)}"
+        )
+    validate_targets(args.targets, probeable)
 
     rep.say(f"probe model: {model}   (each location = 2 claude -p calls)")
     locations = probe_locations(root, manifest, args.targets)
@@ -1560,9 +1574,27 @@ place; project skills belong there, not in ~/.claude/skills/.
 {marker}
 """
 
-# `parent` is filled with a json.dumps-quoted string: JSON string escaping
-# is a subset of TOML basic-string escaping, so any path — quotes and
-# backslashes included — reloads as exactly the path that was given.
+def toml_string(value: str) -> str:
+    """`value` as a TOML basic string.
+
+    json.dumps is almost this, but it emits non-BMP characters as UTF-16
+    surrogate-pair escapes and leaves DEL literal — both invalid TOML.
+    Only the quote, the backslash, and control characters need escaping,
+    and every escape emitted here is a Unicode scalar value.
+    """
+
+    def enc(ch: str) -> str:
+        if ch in ('"', "\\"):
+            return "\\" + ch
+        if ord(ch) < 0x20 or ord(ch) == 0x7F:
+            return f"\\u{ord(ch):04X}"
+        return ch
+
+    return '"' + "".join(enc(ch) for ch in value) + '"'
+
+
+# `parent` is filled by toml_string(), so any path — quotes, backslashes,
+# non-ASCII included — reloads as exactly the path that was given.
 STANZA = """
 [projects."{name}"]
 parent = {parent}
@@ -1591,6 +1623,10 @@ def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
     manifest = load_manifest(manifest_path)
 
     org, name = split_spec(args.spec)
+    if name == "global":
+        # Refused at load too, but that is too late here: the stanza would
+        # already be appended, breaking every later command's manifest parse.
+        raise Fatal("'global' is the reserved global-tier target; pick another name")
     if not COMPONENT_RE.match(args.main):
         raise Fatal(f"--main must be a plain directory name: {args.main}")
     parent_raw = args.parent or f"~/git/{org}/{name}"
@@ -1623,7 +1659,7 @@ def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
     rep.ok(f"created projects/{name}/CLAUDE.md (stub)")
 
     with manifest_path.open("a", encoding="utf-8") as handle:
-        handle.write(STANZA.format(name=name, parent=json.dumps(parent_raw), main=args.main))
+        handle.write(STANZA.format(name=name, parent=toml_string(parent_raw), main=args.main))
     rep.ok("appended manifest stanza to projects.toml")
 
     rep.say("next steps")

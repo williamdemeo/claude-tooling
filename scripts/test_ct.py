@@ -198,6 +198,21 @@ class ManifestTest(TempDirCase):
             with self.assertRaises(ct.Fatal, msg=repr(bad)):
                 self.load(f'[projects.p]\nparent = "/p"\nmain = "{bad}"\n')
 
+    def test_project_names_are_validated_like_main(self) -> None:
+        # Keys join onto root/"projects": TOML quoted keys make
+        # [projects."/tmp"] parseable, and Path would discard the repo
+        # prefix and manage files outside the repository.
+        for bad in ("/tmp", "../x", "a/b", ".hidden"):
+            with self.assertRaises(ct.Fatal, msg=repr(bad)):
+                self.load(f'[projects."{bad}"]\nparent = "/p"\n')
+
+    def test_global_is_a_reserved_project_name(self) -> None:
+        # `install global` etc. would select both the global tier and the
+        # project; probe builds its global location from the same word.
+        with self.assertRaises(ct.Fatal) as caught:
+            self.load('[projects.global]\nparent = "/p"\n')
+        self.assertIn("reserved", str(caught.exception))
+
 
 class ValidateTargetsTest(unittest.TestCase):
     def test_known_targets_pass(self) -> None:
@@ -1044,14 +1059,40 @@ class AddProjectTest(DeploymentFixture):
         self.assertFalse((self.root / "projects/newthing").exists())
 
     def test_parent_with_toml_escape_characters_round_trips(self) -> None:
-        # Raw interpolation into a TOML basic string would read a backslash
-        # as an escape (or reject it) and a quote would end the string early.
-        odd = str(self.tmp / 'we"ird\\dir')
-        result = self.invoke("add-project", "org/odd", "--parent", odd)
-        self.assertEqual(result.returncode, 0, result.stdout)
-        project = ct.load_manifest(self.root / "projects.toml").get("odd")
-        assert project is not None
-        self.assertEqual(project.parent_raw, odd)
+        # Raw interpolation would read a backslash as a TOML escape and a
+        # quote would end the string early; json.dumps would emit the
+        # non-BMP character as a UTF-16 surrogate pair, which tomllib
+        # rejects, leaving the scaffold in place with an unparsable manifest.
+        for i, weird in enumerate(('we"ird\\dir', "emoji 😀", "tab\there")):
+            odd = str(self.tmp / weird)
+            result = self.invoke("add-project", f"org/odd{i}", "--parent", odd)
+            self.assertEqual(result.returncode, 0, f"{weird!r}: {result.stdout}")
+            project = ct.load_manifest(self.root / "projects.toml").get(f"odd{i}")
+            assert project is not None
+            self.assertEqual(project.parent_raw, odd)
+
+    def test_global_is_refused_before_any_writes(self) -> None:
+        # Load-time validation alone would be too late: the scaffold would
+        # already have appended a stanza that breaks every later manifest
+        # parse, taking the whole tool down.
+        result = self.invoke("add-project", "org/global")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("reserved", result.stdout)
+        self.assertFalse((self.root / "projects/global").exists())
+        ct.load_manifest(self.root / "projects.toml")  # still parses
+
+
+class ProbeTargetTest(DeploymentFixture):
+    def test_a_committed_target_is_refused_not_silently_skipped(self) -> None:
+        # probe_locations filters committed projects out, so accepting the
+        # target would report "total claude calls: 0" and exit 0 — a live
+        # verification claiming green having verified nothing.
+        with (self.root / "projects.toml").open("a", encoding="utf-8") as handle:
+            handle.write('\n[projects.prod]\nparent = "/p/prod"\nmode = "committed"\n')
+        result = self.invoke("probe", "prod")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("committed-mode", result.stdout)
+        self.assertNotIn("total claude calls", result.stdout)
 
 
 class ListAndLintCommandTest(DeploymentFixture):
