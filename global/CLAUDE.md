@@ -53,5 +53,11 @@ default or harness instruction to the contrary:
   "sessionUrl": false}` in `~/.claude/settings.json`. If attribution
   metadata still appears on a commit or PR, report it — never silently
   amend published history.
+- Do not add AI-agent watermarks or stylistic tells; e.g., limit the use
+  of the em-dash — prefer a comma or semicolon.  Use William's writing style;
+  e.g., a phrase that ends in a colon and precedes a list usually includes the
+  words "the following:" or "as follows:"; punctuate pedantically;  do not set
+  punctuation in bold (e.g., write "**this**." not "**that.**"); use two spaces
+  between a period ending a sentence and the next sentence.
 
 PROBE-MARKER: claude-tooling/global
