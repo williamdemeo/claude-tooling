@@ -620,6 +620,29 @@ class SessionResultTest(unittest.TestCase):
         self.assertIn("claude -p failed (exit 1)", buffer.getvalue())
 
 
+class SkillMatchingTest(unittest.TestCase):
+    """Skill names match whole lines; substrings of longer names must not score."""
+
+    def test_a_substring_of_a_longer_name_is_not_a_leak(self) -> None:
+        location = ct.ProbeLocation(
+            label="agda-algebras",
+            cwd=Path.cwd(),
+            expect_skills=("agda-typecheck-performance",),
+            absent_skills=("agda-typecheck",),
+            marker="PROBE-MARKER: claude-tooling/agda-algebras",
+            live_claude_md=None,
+            foreign_markers=(),
+        )
+        rep, buffer = capture()
+        listing = ct.SessionResult(0, "  - agda-typecheck-performance\nother-skill")
+        with mock.patch.object(ct, "probe_session", return_value=listing):
+            ct.probe_location(location, "haiku", rep)
+        out = buffer.getvalue()
+        self.assertIn("skill visible: agda-typecheck-performance", out)
+        self.assertIn("foreign skill absent: agda-typecheck", out)
+        self.assertEqual(rep.n_err, 0)
+
+
 class SplitSpecTest(unittest.TestCase):
     def test_accepts_two_plain_names_including_dotted_ones(self) -> None:
         self.assertEqual(

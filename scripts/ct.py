@@ -1305,14 +1305,19 @@ def probe_location(location: ProbeLocation, model: str, rep: Reporter) -> int:
     if not session.ok:
         rep.fail(session_failure(location.label, session))
         return 1
-    out = session.text
+    # Skill names are matched against whole (trimmed) lines: one managed
+    # name can be a substring of another (agda-typecheck vs
+    # agda-typecheck-performance), so substring matching would produce
+    # false leak reports. The marker checks below stay substring-based on
+    # purpose; the model may quote a marker line inside other text.
+    out_names = {line.strip().lstrip("-*• \t") for line in session.text.splitlines()}
     for skill in location.expect_skills:
-        if skill in out:
+        if skill in out_names:
             rep.ok(f"[{location.label}] skill visible: {skill}")
         else:
             rep.fail(f"[{location.label}] managed skill MISSING: {skill}")
     for skill in location.absent_skills:
-        if skill in out:
+        if skill in out_names:
             rep.fail(f"[{location.label}] foreign skill LEAKED: {skill}")
         else:
             rep.ok(f"[{location.label}] foreign skill absent: {skill}")
