@@ -184,6 +184,20 @@ class ManifestTest(TempDirCase):
         assert project is not None
         self.assertTrue(project.parent_declared)
 
+    def test_an_unknown_mode_is_fatal_at_load(self) -> None:
+        # Not every command runs check's layers: install would treat a typo'd
+        # mode as symlink mode and manage a project meant to be untouched.
+        with self.assertRaises(ct.Fatal) as caught:
+            self.load('[projects.p]\nparent = "/p"\nmode = "committted"\n')
+        self.assertIn("mode", str(caught.exception))
+
+    def test_main_must_be_a_plain_directory_name(self) -> None:
+        # A separator or leading dot would escape `parent` via Path joining
+        # (an absolute `main` REPLACES parent entirely: Path("/p") / "/etc").
+        for bad in ("../elsewhere", "/etc", "a/b", ".hidden", ""):
+            with self.assertRaises(ct.Fatal, msg=repr(bad)):
+                self.load(f'[projects.p]\nparent = "/p"\nmain = "{bad}"\n')
+
 
 class ValidateTargetsTest(unittest.TestCase):
     def test_known_targets_pass(self) -> None:
@@ -698,6 +712,16 @@ class ProbeLocationTest(TempDirCase):
 
     def test_committed_projects_are_never_probed(self) -> None:
         self.assertNotIn("three", self.locations([]))
+
+    def test_refuses_a_project_without_an_absolute_parent(self) -> None:
+        # cwd would resolve relative to wherever probe happened to run — and
+        # probe launches PAID claude sessions at that cwd. Refuse up front,
+        # before any location gets a session.
+        for stanza in ('[projects.p]\nmain = "main"\n', '[projects.p]\nparent = "rel/path"\n'):
+            manifest = ct.load_manifest(write(self.tmp / "bad.toml", stanza))
+            for targets in ([], ["p"]):
+                with self.assertRaises(ct.Fatal, msg=f"{stanza!r} targets={targets}"):
+                    ct.probe_locations(self.root, manifest, targets)
         self.assertEqual(
             self.locations([])["one"].foreign_markers, ("PROBE-MARKER: claude-tooling/two",)
         )
@@ -1010,6 +1034,24 @@ class AddProjectTest(DeploymentFixture):
         result = self.invoke("add-project", "bare")
         self.assertEqual(result.returncode, 1)
         self.assertIn("expected <org>/<name>", result.stdout)
+
+    def test_refuses_a_relative_parent(self) -> None:
+        # Every mutating consumer rejects a relative parent (parent_declared),
+        # so scaffolding one would only produce an unusable stanza.
+        result = self.invoke("add-project", "org/newthing", "--parent", "rel/path")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("absolute", result.stdout)
+        self.assertFalse((self.root / "projects/newthing").exists())
+
+    def test_parent_with_toml_escape_characters_round_trips(self) -> None:
+        # Raw interpolation into a TOML basic string would read a backslash
+        # as an escape (or reject it) and a quote would end the string early.
+        odd = str(self.tmp / 'we"ird\\dir')
+        result = self.invoke("add-project", "org/odd", "--parent", odd)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        project = ct.load_manifest(self.root / "projects.toml").get("odd")
+        assert project is not None
+        self.assertEqual(project.parent_raw, odd)
 
 
 class ListAndLintCommandTest(DeploymentFixture):

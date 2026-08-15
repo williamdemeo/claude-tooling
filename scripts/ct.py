@@ -36,6 +36,7 @@ if sys.version_info < (3, 11):  # tomllib landed in 3.11; see docs/recovery.md
 
 import argparse
 import io
+import json
 import os
 import re
 import shutil
@@ -276,6 +277,39 @@ def _string(table: dict[str, object], key: str, default: str, where: str) -> str
     return value
 
 
+# A single plain path component: no separators, no leading dot — so a value
+# joined onto another path cannot be `.`, `..`, absolute, or walk anywhere.
+COMPONENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+MODES = ("symlink", "committed")
+
+
+def _project(name: str, body: object, path: Path) -> Project:
+    """One validated stanza.
+
+    `mode` and `main` are validated HERE, at load, because not every command
+    runs `check`'s layers: a typo'd mode would otherwise fall through
+    `== "committed"` and be *managed*, and a `main` with separators would
+    escape the parent through `Path` joining.
+    """
+    where = f"{path}: [projects.{name}]"
+    table = _table(body, where)
+    parent_raw = _string(table, "parent", "", name)
+    main = _string(table, "main", "main", name)
+    mode = _string(table, "mode", "symlink", name)
+    if mode not in MODES:
+        raise Fatal(f"{where}: mode must be {' or '.join(MODES)}, not '{mode}'")
+    if not COMPONENT_RE.match(main):
+        raise Fatal(f"{where}: `main` must be a plain directory name, not '{main}'")
+    return Project(
+        name=name,
+        parent_raw=parent_raw,
+        parent=Path(expand_tilde(parent_raw)),
+        main=main,
+        mode=mode,
+    )
+
+
 def load_manifest(path: Path) -> Manifest:
     """Parse projects.toml (real TOML — `tomllib`, no subset restrictions)."""
     try:
@@ -288,20 +322,7 @@ def load_manifest(path: Path) -> Manifest:
 
     meta = _table(data.get("meta", {}), f"{path}: [meta]")
     stanzas = _table(data.get("projects", {}), f"{path}: [projects]")
-    projects = tuple(
-        Project(
-            name=name,
-            parent_raw=_string(_table(body, f"{path}: [projects.{name}]"), "parent", "", name),
-            parent=Path(
-                expand_tilde(
-                    _string(_table(body, f"{path}: [projects.{name}]"), "parent", "", name)
-                )
-            ),
-            main=_string(_table(body, f"{path}: [projects.{name}]"), "main", "main", name),
-            mode=_string(_table(body, f"{path}: [projects.{name}]"), "mode", "symlink", name),
-        )
-        for name, body in sorted(stanzas.items())
-    )
+    projects = tuple(_project(name, body, path) for name, body in sorted(stanzas.items()))
     return Manifest(
         path=path,
         canonical_root=_string(meta, "canonical_root", "", f"{path}: [meta]"),
@@ -991,8 +1012,6 @@ def check_manifest(manifest: Manifest, root: Path, rep: Reporter) -> None:
     rep.ok("parsed projects: " + "".join(f"{name} " for name in manifest.names))
 
     for project in manifest.projects:
-        if project.mode not in ("symlink", "committed"):
-            rep.fail(f"{project.name}: invalid mode '{project.mode}'")
         if not project.parent_declared:
             rep.fail(f"{project.name}: parent missing: {project.parent_raw}")
             continue  # every path below would be relative to the cwd
@@ -1376,6 +1395,12 @@ def probe_locations(root: Path, manifest: Manifest, targets: Sequence[str]) -> l
     for project in managed:
         if not selected(targets, project.name):
             continue
+        if not project.parent_declared:
+            raise Fatal(
+                f"{project.name}: no absolute parent in the manifest "
+                f"({project.parent_raw!r}) — a probe would launch paid claude "
+                f"sessions from a cwd resolved relative to wherever this ran"
+            )
         own = project_skills[project.name]
         locations.append(
             ProbeLocation(
@@ -1535,16 +1560,15 @@ place; project skills belong there, not in ~/.claude/skills/.
 {marker}
 """
 
+# `parent` is filled with a json.dumps-quoted string: JSON string escaping
+# is a subset of TOML basic-string escaping, so any path — quotes and
+# backslashes included — reloads as exactly the path that was given.
 STANZA = """
 [projects."{name}"]
-parent = "{parent}"
+parent = {parent}
 main   = "{main}"
 mode   = "symlink"
 """
-
-# A single plain path component: no separators, no leading dot, so it cannot
-# be `.`, `..`, or anything that walks out of projects/.
-COMPONENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def split_spec(spec: str) -> tuple[str, str]:
@@ -1577,10 +1601,12 @@ def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
         raise Fatal(f"project '{name}' already in {manifest_path}")
     if repo_dir.exists():
         raise Fatal(f"projects/{name} already exists in the repo")
-    if '"' in parent_raw:
-        raise Fatal("the parent path must not contain double quotes")
 
     parent_abs = Path(expand_tilde(parent_raw))
+    if not parent_abs.is_absolute():
+        # Every mutating consumer refuses a relative parent (parent_declared),
+        # so scaffolding one would only create an unusable stanza.
+        raise Fatal(f"--parent must be an absolute path (~/… is fine): {parent_raw}")
     if not parent_abs.is_dir():
         rep.warn(f"parent dir does not exist yet: {parent_abs}")
     if not (parent_abs / args.main).is_dir():
@@ -1597,7 +1623,7 @@ def cmd_add_project(args: argparse.Namespace, rep: Reporter) -> int:
     rep.ok(f"created projects/{name}/CLAUDE.md (stub)")
 
     with manifest_path.open("a", encoding="utf-8") as handle:
-        handle.write(STANZA.format(name=name, parent=parent_raw, main=args.main))
+        handle.write(STANZA.format(name=name, parent=json.dumps(parent_raw), main=args.main))
     rep.ok("appended manifest stanza to projects.toml")
 
     rep.say("next steps")
