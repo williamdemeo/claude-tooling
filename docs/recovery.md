@@ -23,16 +23,20 @@ thing you reach for during recovery. All the logic is `scripts/ct.py`; the
         ~/git/williamdemeo/williamdemeo.github.io/main
         ~/git/williamdemeo/github-project/main       (committed mode)
 
-3. **Deploy:**
+3. **Deploy** — via the shims, so nothing beyond `sh` and python3 is needed:
 
         cd ~/git/williamdemeo/claude-tooling/main
-        make install          # idempotent; fresh machine ⇒ no --force needed
-        make check            # static: everything ✓, zero pending
+        ./install.sh          # idempotent; fresh machine ⇒ no --force needed
+        scripts/check.sh      # static: everything ✓, zero pending
+
+   (`make install` / `make check` run the same commands; the Makefile — and
+   the bash its recipes use — is an everyday convenience, not a recovery
+   requirement.)
 
 4. **Prove it live (optional, costs a few haiku calls):**
 
-        make probe            # skills + CLAUDE.md markers per location
-        make verify-discovery # only if discovery behavior itself is in doubt
+        scripts/probe.sh             # skills + CLAUDE.md markers per location
+        scripts/verify-discovery.sh  # only if discovery behavior itself is in doubt
 
 5. **Not (yet) recovered by this repo** — restore by hand:
    - `~/.claude/settings.json` (model, effortLevel, permissions,
