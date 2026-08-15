@@ -808,6 +808,25 @@ PRNUM_RE = re.compile(r"\b(?:PR|pull request|issue)\s*#\d+|\bpull/\d+\b", re.I)
 MARKER_RE = re.compile(r"^PROBE-MARKER: ", re.M)
 EXEMPT = "lint-skills: ok"
 
+# Token SHAPES, deliberately not names: `${TOKEN_VAR}` references and prose
+# mentions of a prefix must pass; only a literal credential-shaped string
+# fails. Every fixture in the test suite assembles its tokens at runtime so
+# no file in this repo ever contains one of these shapes verbatim.
+SECRET_RES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("github token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
+    ("github fine-grained PAT", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b")),
+    ("gitlab token", re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b")),
+    ("anthropic key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{16,}\b")),
+    ("api key (sk-…)", re.compile(r"\bsk-(?!ant-)[A-Za-z0-9_-]{20,}\b")),
+    ("aws access key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("google api key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    ("slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
+    ("npm token", re.compile(r"\bnpm_[A-Za-z0-9]{36,}\b")),
+    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("credentials in URL", re.compile(r"://[A-Za-z0-9._%-]+:[A-Za-z0-9._%-]{4,}@")),
+    ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b")),
+)
+
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str] | tuple[None, str]:
     """Split a leading `---` block of simple `key: value` lines from the body.
@@ -910,6 +929,56 @@ def check_marker(path: Path, label: str, rep: Reporter, hint: str = "") -> None:
         rep.warn(f"{label}: no visible PROBE-MARKER line{hint}")
 
 
+def candidate_files(root: Path) -> list[str]:
+    """Every file a commit could reach: tracked plus untracked-unignored.
+
+    That scope — not just tracked files — is the point: absorbing a live
+    skill or hook drops an UNTRACKED copy into the tree first, and the scan
+    must catch a credential there before `git add` ever runs. Falls back to
+    walking the tree when `root` is not a git checkout (fixture roots), so
+    the scan never silently covers nothing.
+    """
+    result = git(["ls-files", "--cached", "--others", "--exclude-standard"], root)
+    if result.returncode == 0:
+        return [f for f in result.stdout.splitlines() if (root / f).is_file()]
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        for name in filenames:
+            found.append((Path(dirpath) / name).relative_to(root).as_posix())
+    return sorted(found)
+
+
+def scan_secrets(root: Path, rep: Reporter) -> None:
+    """Fail on secret-shaped strings anywhere a commit could reach.
+
+    The pre-public gate: token shapes (SECRET_RES) are errors wherever they
+    appear, so no absorption or edit can leak a live credential into the
+    repo. Matches are MASKED in the report — the lint must not repeat a
+    secret into logs. A `lint-skills: ok` on the line exempts it.
+    """
+    files = candidate_files(root)
+    hits = 0
+    for rel in files:
+        try:
+            text = (root / rel).read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue  # binary or unreadable — not judgeable as text
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if EXEMPT in line:
+                continue
+            for kind, pattern in SECRET_RES:
+                match = pattern.search(line)
+                if match:
+                    token = match.group(0)
+                    rep.fail(
+                        f"{rel}:{lineno} {kind} shape: {token[:10]}… ({len(token)} chars)"
+                    )
+                    hits += 1
+    if hits == 0:
+        rep.ok(f"no secret-shaped strings in {len(files)} scannable file(s)")
+
+
 def run_lint(root: Path, rep: Reporter) -> int:
     """The repo-hygiene pass: skills frontmatter, duplicates, stale paths, markers.
 
@@ -961,6 +1030,9 @@ def run_lint(root: Path, rep: Reporter) -> int:
         duplicates = True
     if not duplicates:
         rep.ok("no duplicates in any visible set")
+
+    rep.say("lint: secret-shaped strings (the pre-public gate)")
+    scan_secrets(root, rep)
 
     rep.say(f"lint summary: {rep.n_err} error(s), {rep.n_warn} warning(s)")
     return 0 if rep.n_err == 0 else 1
