@@ -1,5 +1,6 @@
 # Makefile — claude-tooling: William's versioned Claude Code configuration.
 # All targets log verbosely in real time (green ✓ / red ✗ per item).
+# The *.sh entry points are shims into scripts/ct.py (python >= 3.11, stdlib).
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
@@ -8,7 +9,7 @@ PROJECT ?=
 DRY_RUN ?=
 FORCE   ?=
 
-.PHONY: help install check probe list verify-discovery
+.PHONY: help install check test probe list verify-discovery
 
 help: ## show available targets
 	@awk -F':.*## ' '/^[a-z-]+:.*## /{printf "  make %-18s %s\n", $$1, $$2}' Makefile
@@ -19,6 +20,9 @@ install: ## symlink config into place from this repo (idempotent, backups under 
 
 check: ## static verification — manifest, lint, link state; zero tokens
 	scripts/check.sh $(PROJECT)
+
+test: ## unit tests for scripts/ct.py (tmp fixtures only; never touches live config)
+	python3 -m unittest discover -s scripts -q
 
 probe: ## LIVE verification matrix — spawns real claude -p sessions (costs tokens)
 	scripts/probe.sh $(PROJECT)
