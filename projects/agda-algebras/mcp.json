@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "agda": {
+      "command": "/home/williamdemeo/git/formalverification/agda-native-air/main/scripts/run-server.sh",
+      "args": [
+        "--agda-flags", "-i agda-dojang/agda --library-file=agda/libraries -l agda-dojang -l standard-library -l agda-algebras",
+        "--timeout", "600"
+      ],
+      "env": {
+        "AGDA_ALGEBRAS_ROOT": "${PWD}"
+      }
+    }
+  }
+}
