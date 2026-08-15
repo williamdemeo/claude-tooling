@@ -9,7 +9,7 @@ PROJECT ?=
 DRY_RUN ?=
 FORCE   ?=
 
-.PHONY: help install check test probe list verify-discovery
+.PHONY: help install check lint test probe list verify-discovery
 
 help: ## show available targets
 	@awk -F':.*## ' '/^[a-z-]+:.*## /{printf "  make %-18s %s\n", $$1, $$2}' Makefile
@@ -20,6 +20,9 @@ install: ## symlink config into place from this repo (idempotent, backups under 
 
 check: ## static verification — manifest, lint, link state; zero tokens
 	scripts/check.sh $(PROJECT)
+
+lint: ## repo hygiene only — skills, markers, secret shapes; zero tokens
+	python3 scripts/ct.py lint
 
 test: ## unit tests for scripts/ct.py (tmp fixtures only; never touches live config)
 	python3 -m unittest discover -s scripts -q

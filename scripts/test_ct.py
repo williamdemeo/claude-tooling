@@ -594,6 +594,118 @@ class LintRepoTest(TempDirCase):
         self.assertEqual(rep.n_warn, 1)
 
 
+class SecretScanTest(TempDirCase):
+    """The pre-public gate: secret-shaped strings fail wherever a commit
+    could reach them. Every fixture token is ASSEMBLED at runtime so this
+    file never contains a token-shaped literal that would trip the repo's
+    own scan."""
+
+    @staticmethod
+    def fake(prefix: str, length: int, fill: str = "A") -> str:
+        return prefix + fill * length
+
+    def scan(self, root: Path) -> tuple[ct.Reporter, str]:
+        rep, buffer = capture()
+        ct.scan_secrets(root, rep)
+        return rep, buffer.getvalue()
+
+    def test_token_shapes_are_errors_and_masked(self) -> None:
+        root = self.tmp / "r"
+        shapes = [
+            self.fake("ghp_", 36),
+            self.fake("github_pat_", 22),
+            self.fake("glpat-", 20),
+            self.fake("sk-ant-", 20),
+            self.fake("sk-", 24),
+            self.fake("AKIA", 16),
+            self.fake("AIza", 35),
+            self.fake("xoxb-", 12),
+            self.fake("xapp-", 12),
+            self.fake("npm_", 36),
+            self.fake("eyJ", 10) + "." + self.fake("", 12, "B") + "." + self.fake("", 6, "C"),
+            self.fake("-----BEGIN RSA PRIVATE ", 0) + self.fake("KEY-----", 0),
+            "https://x-access-token:" + self.fake("", 12) + "@github.com/o/r.git",
+            "https://user:" + "abcd+ef!" + "@example.com",  # RFC 3986 sub-delims
+        ]
+        for index, shape in enumerate(shapes):
+            write(root / f"f{index}.md", f"leaked: {shape}\n")
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, len(shapes), out)
+        for shape in shapes:
+            if len(shape) > 20:  # masked: never repeated whole into the report
+                self.assertNotIn(shape, out)
+
+    def test_variable_references_and_prose_prefixes_pass(self) -> None:
+        root = self.tmp / "r"
+        write(
+            root / "doc.md",
+            "clone via https://x-access-token:${CLAUDE_TOOLING_TOKEN}@github.com/o/r\n"
+            "a fine-grained PAT starts with github_pat_ and ghp_ is classic\n"
+            "ssh remotes look like git@github.com:o/r.git\n",
+        )
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 0, out)
+
+    def test_exempt_line_is_skipped(self) -> None:
+        root = self.tmp / "r"
+        write(root / "doc.md", f"example: {self.fake('ghp_', 36)}  (lint-skills: ok)\n")
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 0, out)
+
+    def test_a_stray_binary_byte_does_not_hide_an_ascii_token(self) -> None:
+        # Decoding is by replacement, never strict: one invalid byte in an
+        # otherwise-text file must not exempt the whole file from the gate.
+        root = self.tmp / "r"
+        root.mkdir(parents=True)
+        (root / "blob.bin").write_bytes(b"\xff\xfe" + self.fake("ghp_", 36).encode())
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 1, out)
+        self.assertIn("blob.bin", out)
+
+    def test_a_symlink_target_string_is_scanned_not_dereferenced(self) -> None:
+        # A commit stores the symlink's TARGET STRING as the blob content;
+        # is_file() alone would drop this broken link and never see it.
+        root = self.tmp / "r"
+        root.mkdir(parents=True)
+        (root / "sneaky").symlink_to(self.fake("ghp_", 36))
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 1, out)
+        self.assertIn("sneaky (symlink target)", out)
+
+    def test_staged_content_differing_from_the_worktree_is_scanned(self) -> None:
+        # A token staged and then wiped from the worktree copy still rides
+        # into the next commit; the gate must read the staged blob too.
+        root = self.tmp / "r"
+        write(root / "clean.md", "nothing\n")
+        subprocess.run(["git", "init", "-q", root], check=True, capture_output=True)
+        write(root / "hook.sh", f"TOKEN={self.fake('ghp_', 36)}\n")
+        subprocess.run(["git", "-C", root, "add", "."], check=True, capture_output=True)
+        write(root / "hook.sh", "TOKEN=redacted\n")
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 1, out)
+        self.assertIn("hook.sh (staged):1", out)
+
+    def test_untracked_files_are_scanned_but_ignored_files_are_not(self) -> None:
+        # The scope is "everything a commit could reach": an absorbed-but-
+        # not-yet-added copy must be caught; a gitignored scratch file is
+        # unreachable by commit and must not block.
+        root = self.tmp / "r"
+        write(root / "clean.md", "nothing here\n")
+        write(root / ".gitignore", "/scratch.txt\n")
+        subprocess.run(["git", "init", "-q", root], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", root, "add", "clean.md", ".gitignore"],
+            check=True,
+            capture_output=True,
+        )
+        write(root / "untracked.md", f"oops {self.fake('ghp_', 36)}\n")
+        write(root / "scratch.txt", f"scratch {self.fake('ghp_', 36)}\n")
+        rep, out = self.scan(root)
+        self.assertEqual(rep.n_err, 1, out)
+        self.assertIn("untracked.md:1", out)
+        self.assertNotIn("scratch.txt", out)
+
+
 # ------------------------------------------------------------------ probe --
 
 
