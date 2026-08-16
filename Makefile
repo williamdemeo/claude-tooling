@@ -33,8 +33,8 @@ probe: ## LIVE verification matrix — spawns real claude -p sessions (costs tok
 list: ## inventory of managed CLAUDE.md files and skills by tier
 	scripts/list.sh
 
-stale-worktrees: ## advisory scan for merged/stale worktrees; prints removal commands, runs none
-	scripts/stale-worktrees.sh $(PROJECT)
+stale-worktrees: ## scan for merged/stale worktrees; prints removals (REMOVE=1 executes them)
+	scripts/stale-worktrees.sh $(if $(REMOVE),--remove) $(PROJECT)
 
 verify-discovery: ## re-verify the discovery rules with throwaway fixtures (costs tokens)
 	scripts/verify-discovery.sh

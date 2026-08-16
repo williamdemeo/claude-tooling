@@ -932,12 +932,14 @@ def judge_worktree(main_checkout: Path, path: Path, branch: str | None) -> Workt
     return WorktreeVerdict(path, branch, dirty, merged, equivalent, upstream_gone)
 
 
-def scan_stale_worktrees(label: str, main_checkout: Path, rep: Reporter) -> None:
-    """Report one project's stale worktrees and PRINT the removal commands.
+def scan_stale_worktrees(label: str, main_checkout: Path, rep: Reporter, remove: bool) -> None:
+    """Report one project's stale worktrees; print — or execute — removals.
 
-    Nothing is executed: removal stays a human paste of a printed line, and
-    the printed `git branch -d` (never -D) refuses unmerged branches, so
-    even a wrong verdict cannot lose commits.
+    By default nothing is executed: removal stays a human paste of a
+    printed line. Under `remove`, exactly that printed set runs — dirty
+    worktrees are still skipped, and branch deletion is still `git branch
+    -d` (never -D), which refuses unmerged branches; a refused branch is
+    reported as kept. Either way a wrong verdict cannot lose commits.
     """
     rep.say(f"stale worktrees: {label}  ({main_checkout})")
     if not is_git_checkout(main_checkout):
@@ -970,14 +972,34 @@ def scan_stale_worktrees(label: str, main_checkout: Path, rep: Reporter) -> None
             rep.warn(f"{label}: {name} — {', '.join(reasons)}, but DIRTY; inspect it first")
         else:
             rep.warn(f"{label}: {name} — {', '.join(reasons)}")
-            remove = f"git -C {main_checkout} worktree remove {path}"
-            if branch is not None:
-                remove += f" && git -C {main_checkout} branch -d {branch}"
-            print(f"      {remove}", file=rep.out)
+            if not remove:
+                command = f"git -C {main_checkout} worktree remove {path}"
+                if branch is not None:
+                    command += f" && git -C {main_checkout} branch -d {branch}"
+                print(f"      {command}", file=rep.out)
+                continue
+            removal = git(["worktree", "remove", str(path)], main_checkout)
+            if removal.returncode != 0:
+                detail = (removal.stderr or removal.stdout).strip().splitlines()
+                rep.warn(
+                    f"{label}: {name} — worktree remove refused"
+                    f"{': ' + detail[-1] if detail else ''}"
+                )
+                continue
+            rep.ok(f"{label}: removed worktree {path}")
+            if branch is None:
+                continue
+            if git(["branch", "-d", branch], main_checkout).returncode == 0:
+                rep.ok(f"{label}: deleted branch {branch}")
+            else:
+                rep.warn(
+                    f"{label}: kept branch {branch} — git branch -d refused (not "
+                    f"merged into HEAD; review it, then delete with -D yourself)"
+                )
 
 
 def cmd_stale_worktrees(args: argparse.Namespace, rep: Reporter) -> int:
-    """stale-worktrees — advisory scan; prints removal commands, runs none."""
+    """stale-worktrees — scan for stale worktrees; --remove executes the removals."""
     root = repo_root()
     manifest = load_manifest(root / "projects.toml")
     # This repo is not in its own manifest (self-reference); scan its
@@ -986,15 +1008,18 @@ def cmd_stale_worktrees(args: argparse.Namespace, rep: Reporter) -> int:
     self_label = canonical.parent.name or "self"
     validate_targets(args.targets, (self_label, *manifest.names))
     if selected(args.targets, self_label):
-        scan_stale_worktrees(self_label, canonical, rep)
+        scan_stale_worktrees(self_label, canonical, rep, args.remove)
     for project in manifest.projects:
         if not selected(args.targets, project.name):
             continue
         if not project.parent_declared:
             rep.warn(f"{project.name}: no absolute parent in the manifest — skipped")
             continue
-        scan_stale_worktrees(project.name, project.main_checkout, rep)
-    rep.say("nothing was removed — paste a printed line to act on it")
+        scan_stale_worktrees(project.name, project.main_checkout, rep, args.remove)
+    if args.remove:
+        rep.say("removals executed above — re-run without --remove to confirm what remains")
+    else:
+        rep.say("nothing was removed — paste a printed line, or re-run with --remove")
     return rep.summary("stale-worktrees")
 
 
@@ -2183,7 +2208,12 @@ def build_parser() -> argparse.ArgumentParser:
     stale = add(
         "stale-worktrees",
         cmd_stale_worktrees,
-        "advisory scan for merged/stale worktrees; prints removal commands, runs none",
+        "scan for merged/stale worktrees; prints removal commands unless --remove",
+    )
+    stale.add_argument(
+        "--remove",
+        action="store_true",
+        help="execute the removals (dirty worktrees still skipped; branches via -d only)",
     )
     stale.add_argument(
         "targets", nargs="*", metavar="<project>", help="default: every project plus this repo"

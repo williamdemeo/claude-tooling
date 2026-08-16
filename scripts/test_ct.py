@@ -1491,6 +1491,50 @@ class StaleWorktreesTest(DeploymentFixture):
         self.assertEqual(result.returncode, 1)
         self.assertIn("unknown target", result.stdout)
 
+    def branch_exists(self, branch: str) -> bool:
+        return (
+            subprocess.run(
+                ["git", "-C", self.parent / "main", "rev-parse", "--verify", "-q", branch],
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+
+    def test_remove_executes_the_printed_set(self) -> None:
+        self.make_project()
+        result = self.invoke("stale-worktrees", "--remove")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("removed worktree", result.stdout)
+        self.assertIn("deleted branch wt1", result.stdout)
+        self.assertFalse((self.parent / "worktrees/wt1").exists())
+        self.assertFalse(self.branch_exists("wt1"))
+
+    def test_remove_still_skips_dirty_worktrees(self) -> None:
+        self.make_project()
+        write(self.parent / "worktrees/wt1/scratch.txt", "uncommitted\n")
+        result = self.invoke("stale-worktrees", "--remove")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("DIRTY", result.stdout)
+        self.assertTrue((self.parent / "worktrees/wt1").is_dir())
+        self.assertTrue(self.branch_exists("wt1"))
+
+    def test_remove_keeps_a_branch_that_d_refuses(self) -> None:
+        # Upstream gone but unmerged commits (the squash-merge shape):
+        # the worktree goes, the branch survives -d and is reported kept.
+        self.make_project()
+        wt = self.parent / "worktrees/wt1"
+        write(wt / "novel.txt", "unmerged work\n")
+        self.git("add", "novel.txt", cwd=wt)
+        self.git("commit", "-qm", "novel", cwd=wt)
+        self.git("config", "branch.wt1.remote", "origin")
+        self.git("config", "branch.wt1.merge", "refs/heads/wt1")
+        result = self.invoke("stale-worktrees", "--remove")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("removed worktree", result.stdout)
+        self.assertIn("kept branch wt1", result.stdout)
+        self.assertFalse(wt.exists())
+        self.assertTrue(self.branch_exists("wt1"))
+
 
 class AddProjectTest(DeploymentFixture):
     def test_scaffolds_a_stanza_a_stub_and_a_visible_marker(self) -> None:

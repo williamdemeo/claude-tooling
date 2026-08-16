@@ -68,9 +68,16 @@ nothing; removal stays a human paste of a printed line:
 
 `git branch -d` (never `-D`) is the guard — it refuses branches not merged
 into HEAD, so even a wrong verdict cannot lose commits. Dirty worktrees are
-reported but never get a removal line. For a mass cleanup (a hundred
-worktrees, mixed upstreams), use the `worktree-forest-cleanup` skill
-instead — this command is its everyday scanning half.
+reported but never get a removal line.
+
+For batch cleanup, `make stale-worktrees REMOVE=1` (the `--remove` flag)
+executes exactly the set that would have been printed: dirty worktrees are
+still skipped, branch deletion is still `-d`-only, and a branch `-d`
+refuses (e.g. squash-merged upstream) is kept and reported — review it,
+then delete it with `-D` yourself. The habit: run the scan, read it, then
+re-run with `REMOVE=1`. For a mass cleanup (a hundred worktrees, mixed
+upstreams), use the `worktree-forest-cleanup` skill instead — this command
+is its everyday half.
 
 ## Who creates worktrees where (fls specifics)
 
