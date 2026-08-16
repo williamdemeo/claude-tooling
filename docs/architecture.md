@@ -37,7 +37,7 @@ across Claude Code versions.
 
 2.  **CLAUDE.md** ancestor traversal from cwd DOES cross the worktree boundary
     (a file at `~/git/IO/fls/CLAUDE.md` loads in every fls worktree session)
-    The main checkout's own CLAUDE.md does NOT load  into worktree sessions.
+    The main checkout's own CLAUDE.md does NOT load into worktree sessions.
     `~/.claude/CLAUDE.md` always loads.
 
 3.  **settings.json / settings.local.json and auto-memory** resolve through worktrees
@@ -72,7 +72,7 @@ across Claude Code versions.
     do not use it there.
 
 10. **MCP stdio servers spawn with cwd = the directory `claude` was launched from**
-    — NOT a normalized project root — and  `${PWD}` expands to that same directory.
+    — NOT a normalized project root — and `${PWD}` expands to that same directory.
     So a relative `command` and a `${PWD}` env value both resolve per checkout,
     PROVIDED sessions start at the checkout root (launching from a subdirectory
     shifts both).
@@ -134,16 +134,16 @@ would have landed in this repo.
 
 +  **Per-skill symlinks** (both `~/.claude/skills/` and project skills), not
    whole-directory links: leaves room for unmanaged local scratch skills next to
-   managed ones.  Cost: a new repo skill needs  one `make install` to go live;
+   managed ones.  Cost: a new repo skill needs one `make install` to go live;
    `make check` flags unlinked skills.
 
 +  **Absolute symlink targets**, matching the pre-existing fls convention
    (`/home/williamdemeo/git/IO/fls/.claude`).  Single-machine layout is the contract;
-   the manifest records it. 
+   the manifest records it.
 
 +  **No `worktrees` field in the manifest**: fls keeps worktrees under a dozen
    different container dirs; a manifest list would be a lie waiting to happen.
-   `git worktree list --porcelain` in the main  checkout is the source of truth, and
+   `git worktree list --porcelain` in the main checkout is the source of truth, and
    `scripts/link-worktrees.sh` trusts only it.
 
 +  **Live config follows the canonical checkout** (`meta.canonical_root`, i.e. this
@@ -160,7 +160,7 @@ would have landed in this repo.
 
 +  **`.mcp.json` is presence-driven and per-member guarded**: a project gets the
    `.mcp.json` tier only if `projects/<p>/mcp.json` exists in this repo; nothing is
-   scaffolded, and `check` flags our  deployment shape wherever its repo source is
+   scaffolded, and `check` flags our deployment shape wherever its repo source is
    missing.  The tracked-content guard is judged per member: a transitional
    tracked-`.claude` checkout still gets its `.mcp.json` link, but a checkout that
    tracks `.mcp.json` itself is never touched.

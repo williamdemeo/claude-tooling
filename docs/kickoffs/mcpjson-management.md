@@ -100,12 +100,11 @@ drift detection in `check`) — the whole design hangs on this.
    committed-mode untouched, absence-driven no-op. `mypy --strict` clean
    (`nix run nixpkgs#mypy -- --strict scripts/ct.py` works here).
 4. Absorb the live contents into the repo IN THIS PR (repo-only, safe):
-   `projects/agda-algebras/mcp.json` from aa master's fixed file,
-   `projects/agda-native-air/mcp.json` from air main's current file. Show
-   William the diffs against every other copy. Scan the contents for
-   anything secret-looking before committing (they should be command paths
-   and args only) — this repo may go public (issue #4); flag anything
-   doubtful there too.
+   `projects/agda-algebras/mcp.json` from aa master's fixed file; do NOT absorb
+   from air main's current file; we will not carry `projects/agda-algebras/mcp.json`
+   here.  Show William the diffs against every other copy.  Scan the contents for
+   anything secret-looking before committing (they should be command paths and args
+   only) — this repo may go public (issue #4); flag anything doubtful there too.
 5. Docs in the same PR: `docs/architecture.md` (managed-member table + the
    new verified rule), `docs/worktree-workflow.md` (new-worktree ritual),
    and `docs/migration.md` if its residual-items list mentions `.mcp.json`.
