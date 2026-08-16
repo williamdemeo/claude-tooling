@@ -884,6 +884,20 @@ class DeploymentFixture(TempDirCase):
         self.skill(self.root / "projects/demo/claude/skills/demo-skill")
         write(self.root / "projects/demo/claude/settings.json", "{}\n")
         write(
+            self.root / "projects/demo/mcp.json",
+            """\
+            {
+              "mcpServers": {
+                "demo-server": {
+                  "command": "./scripts/run-server.sh",
+                  "args": ["--flag", "value"],
+                  "env": {"DEMO_ROOT": "${PWD}"}
+                }
+              }
+            }
+            """,
+        )
+        write(
             self.root / "projects.toml",
             f"""\
             [meta]
@@ -912,17 +926,20 @@ class DeploymentFixture(TempDirCase):
             env={**os.environ, "HOME": str(self.home)},
         )
 
-    def make_project(self, *, track_claude: bool = False) -> None:
-        """A main checkout plus one linked worktree, optionally with tracked .claude."""
+    def make_project(self, *, track_claude: bool = False, track_mcp: bool = False) -> None:
+        """A main checkout plus one linked worktree, optionally tracking members."""
         main = self.parent / "main"
         main.mkdir(parents=True)
         self.git("init", "-q", "-b", "main", ".")
         write(main / "README", "demo\n")
+        tracked = ["README"]
         if track_claude:
             write(main / ".claude/settings.json", "{}\n")
-            self.git("add", "README", ".claude")
-        else:
-            self.git("add", "README")
+            tracked.append(".claude")
+        if track_mcp:
+            write(main / ".mcp.json", '{"mcpServers": {}}\n')
+            tracked.append(".mcp.json")
+        self.git("add", *tracked)
         self.git("commit", "-qm", "initial")
         self.git("worktree", "add", "-q", "-b", "wt1", "../worktrees/wt1")
 
@@ -1135,6 +1152,232 @@ class TrackedClaudeGuardTest(DeploymentFixture):
         result = self.invoke("check")
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("demo worktrees: 2 with tracked .claude (transitional", result.stdout)
+
+
+class McpJsonDeploymentTest(DeploymentFixture):
+    """The presence-driven `.mcp.json` tier: repo copy → parent → checkout roots."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.make_project()
+        self.repo_mcp = self.root / "projects/demo/mcp.json"
+        self.parent_mcp = self.parent / ".mcp.json"
+
+    def test_install_deploys_the_mcp_shape(self) -> None:
+        result = self.invoke("install")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(os.readlink(self.parent_mcp), str(self.repo_mcp))
+        for checkout in ("main", "worktrees/wt1"):
+            self.assertEqual(
+                os.readlink(self.parent / checkout / ".mcp.json"), str(self.parent_mcp)
+            )
+        self.invoke("install")  # the exclude line must not accumulate
+        exclude = (self.parent / "main/.git/info/exclude").read_text().splitlines()
+        self.assertEqual(exclude.count("/.mcp.json"), 1)
+
+    def test_absence_is_a_complete_no_op(self) -> None:
+        # A project without projects/<p>/mcp.json gets NOTHING: no parent
+        # copy, no checkout links, no exclude line — and check stays green.
+        self.repo_mcp.unlink()
+        result = self.invoke("install")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse(self.parent_mcp.is_symlink() or self.parent_mcp.exists())
+        for checkout in ("main", "worktrees/wt1"):
+            self.assertFalse((self.parent / checkout / ".mcp.json").exists())
+        exclude = (self.parent / "main/.git/info/exclude").read_text().splitlines()
+        self.assertNotIn("/.mcp.json", exclude)
+        check = self.invoke("check")
+        self.assertEqual(check.returncode, 0, check.stdout)
+        self.assertIn("0 warnings, 0 errors", check.stdout)
+
+    def test_new_worktrees_get_the_mcp_link_backfilled(self) -> None:
+        self.invoke("install")
+        self.git("worktree", "add", "-q", "-b", "wt2", "../worktrees/wt2")
+        result = self.invoke("link-worktrees", "demo")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(
+            os.readlink(self.parent / "worktrees/wt2/.mcp.json"), str(self.parent_mcp)
+        )
+
+    def test_a_real_premigration_copy_survives_without_force(self) -> None:
+        live = write(self.parent / "main/.mcp.json", '{"mcpServers": {"old": {}}}\n')
+        result = self.invoke("install")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("!! worktree main/.mcp.json — real file/dir in the way", result.stdout)
+        self.assertEqual(live.read_text(), '{"mcpServers": {"old": {}}}\n')
+        check = self.invoke("check")
+        self.assertEqual(check.returncode, 0, check.stdout)
+        self.assertIn("1 with a real .mcp.json (pre-migration copy", check.stdout)
+
+    def test_force_swaps_the_real_copy_into_the_backup_tree(self) -> None:
+        live = write(self.parent / "main/.mcp.json", '{"mcpServers": {"old": {}}}\n')
+        result = self.invoke("install", "--force")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        backup = self.tmp / f"backups/20260809-000000{live}"
+        self.assertEqual(backup.read_text(), '{"mcpServers": {"old": {}}}\n')
+        self.assertEqual(os.readlink(live), str(self.parent_mcp))
+        self.assertNotIn("NEEDS ATTENTION", result.stdout)
+
+    def test_worktrees_are_never_linked_to_an_unmanaged_parent_file(self) -> None:
+        # Without --force a real parent .mcp.json survives ensure_link — and
+        # checkout links to it would RESOLVE, quietly deploying content this
+        # repo never saw while looking installed. They must be withheld.
+        write(self.parent_mcp, '{"mcpServers": {"local": {}}}\n')
+        result = self.invoke("install")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("!! demo/.mcp.json — real file/dir in the way", result.stdout)
+        self.assertIn("not linking checkout roots to it", result.stdout)
+        for checkout in ("main", "worktrees/wt1"):
+            live = self.parent / checkout / ".mcp.json"
+            self.assertFalse(live.is_symlink() or live.exists())
+        # --force adopts the parent file (backed up), then links normally.
+        result = self.invoke("install", "--force")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(os.readlink(self.parent_mcp), str(self.repo_mcp))
+        for checkout in ("main", "worktrees/wt1"):
+            self.assertEqual(
+                os.readlink(self.parent / checkout / ".mcp.json"), str(self.parent_mcp)
+            )
+
+    def test_dry_run_force_still_predicts_the_checkout_links(self) -> None:
+        # A --force run adopts the parent file before the worktree pass, so
+        # a --dry-run --force must plan the checkout links, not withhold them.
+        write(self.parent_mcp, '{"mcpServers": {"local": {}}}\n')
+        result = self.invoke("install", "--dry-run", "--force")
+        self.assertIn("demo/.mcp.json — would replace real file/dir", result.stdout)
+        self.assertIn("worktree main/.mcp.json — would link", result.stdout)
+        self.assertNotIn("not linking checkout roots", result.stdout)
+
+    def test_committed_mode_is_never_touched(self) -> None:
+        manifest = self.root / "projects.toml"
+        manifest.write_text(
+            manifest.read_text().replace('mode   = "symlink"', 'mode   = "committed"'),
+            encoding="utf-8",
+        )
+        result = self.invoke("install")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("committed-mode project", result.stdout)
+        self.assertFalse(self.parent_mcp.exists())
+        for checkout in ("main", "worktrees/wt1"):
+            self.assertFalse((self.parent / checkout / ".mcp.json").exists())
+
+    def test_check_flags_our_shape_when_the_repo_source_is_gone(self) -> None:
+        self.invoke("install")
+        self.repo_mcp.unlink()
+        result = self.invoke("check")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("demo/.mcp.json → repo link without a source", result.stdout)
+        self.assertIn(".mcp.json link without a repo source", result.stdout)
+
+    def test_a_foreign_real_parent_mcp_json_is_not_ours_to_judge(self) -> None:
+        # Unmanaged local config at the parent: check must stay silent about
+        # it (only OUR deployment shape without a source is flagged).
+        self.repo_mcp.unlink()
+        write(self.parent_mcp, '{"mcpServers": {"local": {}}}\n')
+        result = self.invoke("check")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn(".mcp.json", result.stdout)
+
+    def test_check_is_green_and_censuses_mcp_after_install(self) -> None:
+        self.invoke("install")
+        result = self.invoke("check")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("0 warnings, 0 errors", result.stdout)
+        self.assertIn("demo worktrees: 2 with .mcp.json linked", result.stdout)
+        self.assertIn("✓ demo: /.mcp.json present in shared info/exclude", result.stdout)
+
+    def test_list_names_the_registered_servers(self) -> None:
+        result = self.invoke("list")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("mcp.json (servers: demo-server)", result.stdout)
+
+
+class TrackedMcpJsonGuardTest(DeploymentFixture):
+    """A checkout that TRACKS .mcp.json is never touched — not even under --force."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.make_project(track_mcp=True)
+
+    def test_tracked_mcp_json_is_skipped_under_force(self) -> None:
+        result = self.invoke("install", "--force")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn(".mcp.json is TRACKED content here; skipped", result.stdout)
+        for checkout in ("main", "worktrees/wt1"):
+            live = self.parent / checkout / ".mcp.json"
+            self.assertFalse(live.is_symlink())
+            self.assertEqual(live.read_text(), '{"mcpServers": {}}\n')
+        # The parent copy still deploys; only the tracked checkouts are held.
+        self.assertEqual(
+            os.readlink(self.parent / ".mcp.json"), f"{self.root}/projects/demo/mcp.json"
+        )
+
+    def test_check_counts_them_as_guarded_not_broken(self) -> None:
+        self.invoke("install", "--force")
+        result = self.invoke("check")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("demo worktrees: 2 with tracked .mcp.json", result.stdout)
+
+
+class McpJsonLintTest(TempDirCase):
+    """A repo mcp.json must parse, register servers, and name only live paths."""
+
+    def build(self, mcp_text: str) -> Path:
+        root = self.tmp / "repo"
+        write(root / "global/CLAUDE.md", "PROBE-MARKER: claude-tooling/global\n")
+        write(
+            root / "projects/demo/CLAUDE.md", "PROBE-MARKER: claude-tooling/demo\n"
+        )
+        (root / "projects/demo/claude/skills").mkdir(parents=True, exist_ok=True)
+        write(root / "projects/demo/mcp.json", mcp_text)
+        return root
+
+    def lint(self, mcp_text: str) -> tuple[ct.Reporter, str]:
+        rep, buffer = capture()
+        ct.run_lint(self.build(mcp_text), rep)
+        return rep, buffer.getvalue()
+
+    def test_a_valid_file_reports_its_servers(self) -> None:
+        rep, out = self.lint('{"mcpServers": {"b": {}, "a": {}}}\n')
+        self.assertEqual(rep.n_err, 0, out)
+        self.assertIn("✓ projects/demo/mcp.json: server(s): a, b", out)
+
+    def test_invalid_json_is_an_error(self) -> None:
+        rep, out = self.lint('{"mcpServers": \n')
+        self.assertEqual(rep.n_err, 1)
+        self.assertIn("invalid JSON", out)
+
+    def test_no_servers_is_an_error(self) -> None:
+        # Deploying an empty registration to every checkout root would
+        # silently register nothing — catch it in the repo instead.
+        for text in ('{"mcpServers": {}}\n', '{"other": 1}\n', '[]\n'):
+            rep, out = self.lint(text)
+            self.assertEqual(rep.n_err, 1, out)
+            self.assertIn("no mcpServers entries", out)
+
+    def test_a_stale_absolute_path_is_an_error(self) -> None:
+        rep, out = self.lint(
+            '{"mcpServers": {"s": {"command": "/home/williamdemeo/gone-forever/run.sh"}}}\n'
+        )
+        self.assertEqual(rep.n_err, 1)
+        self.assertIn("stale path: /home/williamdemeo/gone-forever/run.sh", out)
+
+    def test_env_placeholders_are_not_paths(self) -> None:
+        rep, out = self.lint(
+            '{"mcpServers": {"s": {"command": "./run.sh", "env": {"ROOT": "${PWD}"}}}}\n'
+        )
+        self.assertEqual(rep.n_err, 0, out)
+
+
+class McpServerNamesTest(TempDirCase):
+    def test_names_are_sorted(self) -> None:
+        path = write(self.tmp / "mcp.json", '{"mcpServers": {"b": {}, "a": {}}}\n')
+        self.assertEqual(ct.mcp_server_names(path), ["a", "b"])
+
+    def test_unparseable_or_shapeless_is_empty(self) -> None:
+        self.assertEqual(ct.mcp_server_names(self.tmp / "absent.json"), [])
+        self.assertEqual(ct.mcp_server_names(write(self.tmp / "bad.json", "{")), [])
+        self.assertEqual(ct.mcp_server_names(write(self.tmp / "list.json", "[]")), [])
 
 
 class AddProjectTest(DeploymentFixture):

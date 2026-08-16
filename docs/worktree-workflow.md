@@ -10,6 +10,10 @@ Every project follows the same layout (manifest: `projects.toml`):
                        follows `git worktree list`, not directory names)
       CLAUDE.md        → claude-tooling (loads in every session under <proj>/)
       .claude/         real dir; skills/<name> → claude-tooling
+      .mcp.json        → claude-tooling — only for projects with a
+                         projects/<p>/mcp.json there (agda-algebras,
+                         agda-native-air); each checkout root gets a
+                         .mcp.json → parent link too
 
 ## New-worktree ritual
 
@@ -20,9 +24,17 @@ From the main checkout:
 
 `link-worktrees.sh` backfills the root `.claude` symlink over every
 worktree the main checkout knows about (idempotent — run it any time), and
-keeps the `/.claude` line in the shared `.git/info/exclude`. Claude-web
-branches (`claude/*`) that get checked out locally afterwards need the same
-backfill — one more reason the script re-runs over everything.
+keeps the `/.claude` line in the shared `.git/info/exclude`. For projects
+with a managed mcp.json it backfills the root `.mcp.json` link and the
+`/.mcp.json` exclude line the same way. Claude-web branches (`claude/*`)
+that get checked out locally afterwards need the same backfill — one more
+reason the script re-runs over everything.
+
+**Launch `claude` from the checkout root** in mcp-managed projects: MCP
+servers spawn with cwd = the launch directory, and `${PWD}` in the config
+expands there too (discovery rules 8–10, docs/architecture.md) — so
+agda-algebras' library registration and air's relative `command` path both
+resolve to the right checkout only from its root.
 
 ## Cautions that have bitten before
 

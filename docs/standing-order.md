@@ -47,7 +47,7 @@ The order's gates, and what `make check` does about them:
 Summary: commits and PRs never carry an AI identity as author, committer,
 or `Co-Authored-By`; the git identity is William's, and AI provenance is
 recorded — when the assistance was nontrivial — as a plain commit-body /
-PR-description line: `AI-assisted development: <model> (Anthropic)`.
+PR-description line: `🤖 AI-assisted development: <model> (Anthropic)`.
 Existing history keeps its old trailers; nothing is rewritten.
 
 Enforcement is layered:
