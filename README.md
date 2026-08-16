@@ -2,29 +2,25 @@
 
 # claude-tooling
 
-This repository contains the versioned *source of truth* for @williamdemeo's Claude
-Code configuration.
+This repository contains the versioned *source of truth* for William's Claude Code
+configuration.  It consists of a global config plus per-project configs, with every
+project treated uniformly.  It contains an installer that symlinks everything into
+place, and documentation of the multi-project git + Claude workflows.
 
-It consists of a global config plus per-project configs, with every project treated
-uniformly.
+**Dotfiles-style**.
+This repo holds the files; the live locations are symlinks.
 
-It contains an installer that symlinks everything into place, and documentation of
-the multi-project git + Claude workflows.
-
-**Dotfiles-style**.  This repo holds the files; the live locations are symlinks.
-
-**Catastrophe recovery**.  Fresh machine → clone → `make install`→ works (see [docs/recovery.md](docs/recovery.md)).
+**Catastrophe recovery**.
+Fresh machine → clone → `make install`→ works (see [docs/recovery.md](docs/recovery.md)).
 
 ## The placement principle
 
-Claude config committed *inside* a repo is reserved for config aimed at that
-repo's *consumers*.
+Claude config committed *inside* a repo is reserved for config aimed at that repo's
+*consumers*.  For example, the `williamdemeo/github-project` template ships
+`.claude/skills` teaching its users the workflow; that's product config.
 
-For example, the `williamdemeo/github-project` template ships `.claude/skills`
-teaching its users the workflow; that's product config.
-
-Config that encodes @williamdemeo's workflow lives here, in the claude-tooling
-repository, and reaches each project via symlinks.
+Config that encodes William's workflow lives here, in the claude-tooling repository,
+and reaches each project via symlinks.
 
 **One deliberate exception**.  It seems that, at the time of this writing, if a
 config is needed by a repo's  *remote session* (e.g., a fresh Claude Code container
@@ -52,17 +48,17 @@ Whether a project keeps such config committed is a per-project decision recorded
                              .mcp.json at the parent and every checkout root
     docs/                    architecture, workflows, migration runbook, recovery
 
-**Requirements**: git, a POSIX shell, and python3 ≥ 3.11 — stdlib only, no flake
-and no `pip install`, because this repo has to work on a bare machine (see
-[docs/recovery.md](docs/recovery.md)). 3.11 is the floor because `tomllib` parses
+**Requirements**: git, a POSIX shell, and python3 ≥ 3.11 (stdlib only, no flake and
+no `pip install`, because this repo has to work on a bare machine; see
+[docs/recovery.md](docs/recovery.md)).  3.11 is the floor because `tomllib` parses
 the manifest. GNU make (and the bash its recipes run under) is an everyday
 convenience, not a requirement: every Makefile target is a one-line call into
 `scripts/ct.py`, and the recovery runbook uses the `sh` shims directly.
 
 ## The uniform per-project pattern
 
-For each project `~/git/<org>/<proj>/` with a main checkout (`main/` or
-`master/`) and worktrees beside it:
+For each project `~/git/<org>/<proj>/` with a main checkout (`main/` or `master/`)
+and worktrees beside it:
 
     ~/git/<org>/<proj>/CLAUDE.md          → projects/<p>/CLAUDE.md   (symlink)
     ~/git/<org>/<proj>/.mcp.json          → projects/<p>/mcp.json    (only if that
