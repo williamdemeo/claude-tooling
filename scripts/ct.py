@@ -39,6 +39,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -862,6 +863,195 @@ def cmd_link_worktrees(args: argparse.Namespace, rep: Reporter) -> int:
         else:
             link_worktrees_for(project, root, rep, opts)
     return rep.summary("link-worktrees")
+
+
+# ---------------------------------------------------------- stale worktrees --
+
+
+@dataclass(frozen=True)
+class WorktreeVerdict:
+    """One linked worktree's staleness signals, judged READ-ONLY."""
+
+    path: Path
+    branch: str | None  # None = detached HEAD
+    dirty: bool
+    merged: bool  # its HEAD is an ancestor of the main checkout's HEAD
+    equivalent: bool  # every commit patch-equivalent to one on main (rebased)
+    upstream_gone: bool  # tracked a remote branch that no longer exists
+
+
+def worktree_entries(main_checkout: Path) -> list[tuple[Path, str | None]] | None:
+    """(path, branch) per checkout from `git worktree list --porcelain`.
+
+    Same source-of-truth rule as `worktree_paths`; detached worktrees get a
+    None branch. Returns None when git itself fails — a failure must not
+    read as an empty (i.e. clean) result. Blocks are blank-line separated,
+    so a "" sentinel flushes the last one.
+    """
+    proc = git(["worktree", "list", "--porcelain"], main_checkout)
+    if proc.returncode != 0:
+        return None
+    entries: list[tuple[Path, str | None]] = []
+    path: Path | None = None
+    branch: str | None = None
+    for line in (*proc.stdout.splitlines(), ""):
+        if line.startswith("worktree "):
+            path = Path(line[len("worktree ") :])
+            branch = None
+        elif line.startswith("branch refs/heads/"):
+            branch = line[len("branch refs/heads/") :]
+        elif not line and path is not None:
+            entries.append((path, branch))
+            path = None
+    return entries
+
+
+def judge_worktree(main_checkout: Path, path: Path, branch: str | None) -> WorktreeVerdict | None:
+    """Collect the staleness signals for one linked worktree, touching nothing.
+
+    `merged` is ancestry (survives a plain merge); `equivalent` is git
+    cherry's patch-id comparison (survives a rebase, NOT a squash-merge —
+    upstream_gone is the useful signal for squash workflows, judged from
+    the refs of the last fetch). Returns None when HEAD or status cannot be
+    read: cleanliness was never established, so no verdict may be given.
+    """
+    head_proc = git(["rev-parse", "HEAD"], path)
+    status_proc = git(["status", "--porcelain"], path)
+    if head_proc.returncode != 0 or status_proc.returncode != 0:
+        return None
+    head = head_proc.stdout.strip()
+    dirty = bool(status_proc.stdout.strip())
+    merged = bool(head) and git(["merge-base", "--is-ancestor", head, "HEAD"], main_checkout).returncode == 0
+    cherry = git(["cherry", "HEAD", head], main_checkout)
+    equivalent = cherry.returncode == 0 and not any(
+        line.startswith("+") for line in cherry.stdout.splitlines()
+    )
+    upstream_gone = False
+    if branch is not None:
+        # %(upstream:track) resolves the tracking state through the
+        # remote's actual fetch refspec (and understands the local remote
+        # "."); hand-building refs/remotes/<remote>/<name> would not, and
+        # would misreport valid configurations as gone.
+        track = git(
+            ["for-each-ref", "--format=%(upstream:track)", f"refs/heads/{branch}"],
+            main_checkout,
+        )
+        upstream_gone = track.returncode == 0 and track.stdout.strip() == "[gone]"
+    return WorktreeVerdict(path, branch, dirty, merged, equivalent, upstream_gone)
+
+
+def removal_command(main_checkout: Path, path: Path, branch: str | None) -> str:
+    """The paste-able removal line, POSIX-quoted.
+
+    Worktree paths can contain spaces and branch names can contain shell
+    metacharacters ($, ;, …); raw interpolation could make the pasted line
+    target the wrong path or execute unintended input.
+    """
+    command = shlex.join(["git", "-C", str(main_checkout), "worktree", "remove", str(path)])
+    if branch is not None:
+        command += " && " + shlex.join(["git", "-C", str(main_checkout), "branch", "-d", branch])
+    return command
+
+
+def scan_stale_worktrees(label: str, main_checkout: Path, rep: Reporter, remove: bool) -> None:
+    """Report one project's stale worktrees; print — or execute — removals.
+
+    By default nothing is executed: removal stays a human paste of a
+    printed line. Under `remove`, exactly that printed set runs — dirty
+    worktrees are still skipped, and branch deletion is still `git branch
+    -d` (never -D), which refuses unmerged branches; a refused branch is
+    reported as kept. Either way a wrong verdict cannot lose commits.
+    """
+    rep.say(f"stale worktrees: {label}  ({main_checkout})")
+    if not is_git_checkout(main_checkout):
+        rep.warn(f"{label}: {main_checkout} is not a git checkout — skipped")
+        return
+    entries = worktree_entries(main_checkout)
+    if entries is None:
+        rep.fail(f"{label}: `git worktree list` failed in {main_checkout} — unscannable")
+        return
+    linked = [
+        (path, branch) for path, branch in entries if path.resolve() != main_checkout.resolve()
+    ]
+    if not linked:
+        rep.ok(f"{label}: no linked worktrees")
+        return
+    for path, branch in linked:
+        name = f"{path.name} [{branch or 'detached HEAD'}]"
+        if not path.is_dir():
+            rep.warn(f"{label}: {name} — gone from disk (git worktree prune?)")
+            continue
+        verdict = judge_worktree(main_checkout, path, branch)
+        if verdict is None:
+            rep.warn(f"{label}: {name} — HEAD/status unreadable; cannot judge, skipped")
+            continue
+        reasons = []
+        if verdict.merged:
+            reasons.append("merged")
+        elif verdict.equivalent:
+            reasons.append("patch-equivalent (rebased?)")
+        if verdict.upstream_gone:
+            reasons.append("upstream gone as of last fetch (squash-merged and deleted?)")
+        if not reasons:
+            rep.ok(f"{label}: {name} — active")
+        elif verdict.dirty:
+            rep.warn(f"{label}: {name} — {', '.join(reasons)}, but DIRTY; inspect it first")
+        elif branch is None and not verdict.merged:
+            # Patch-equivalent only: a detached worktree's exact commits are
+            # not on main, and no `branch -d` guard exists to catch a wrong
+            # verdict — removal could orphan them. Offer nothing.
+            rep.warn(
+                f"{label}: {name} — {', '.join(reasons)}, but detached and not an "
+                f"ancestor of main; ref it first, nothing offered"
+            )
+        else:
+            rep.warn(f"{label}: {name} — {', '.join(reasons)}")
+            if not remove:
+                print(f"      {removal_command(main_checkout, path, branch)}", file=rep.out)
+                continue
+            removal = git(["worktree", "remove", str(path)], main_checkout)
+            if removal.returncode != 0:
+                detail = (removal.stderr or removal.stdout).strip().splitlines()
+                rep.warn(
+                    f"{label}: {name} — worktree remove refused"
+                    f"{': ' + detail[-1] if detail else ''}"
+                )
+                continue
+            rep.ok(f"{label}: removed worktree {path}")
+            if branch is None:
+                continue
+            if git(["branch", "-d", branch], main_checkout).returncode == 0:
+                rep.ok(f"{label}: deleted branch {branch}")
+            else:
+                rep.warn(
+                    f"{label}: kept branch {branch} — git branch -d refused (not "
+                    f"merged into HEAD; review it, then delete with -D yourself)"
+                )
+
+
+def cmd_stale_worktrees(args: argparse.Namespace, rep: Reporter) -> int:
+    """stale-worktrees — scan for stale worktrees; --remove executes the removals."""
+    root = repo_root()
+    manifest = load_manifest(root / "projects.toml")
+    # This repo is not in its own manifest (self-reference); scan its
+    # canonical checkout under its parent-directory name.
+    canonical = Path(expand_tilde(manifest.canonical_root)) if manifest.canonical_root else root
+    self_label = canonical.parent.name or "self"
+    validate_targets(args.targets, (self_label, *manifest.names))
+    if selected(args.targets, self_label):
+        scan_stale_worktrees(self_label, canonical, rep, args.remove)
+    for project in manifest.projects:
+        if not selected(args.targets, project.name):
+            continue
+        if not project.parent_declared:
+            rep.warn(f"{project.name}: no absolute parent in the manifest — skipped")
+            continue
+        scan_stale_worktrees(project.name, project.main_checkout, rep, args.remove)
+    if args.remove:
+        rep.say("removals executed above — re-run without --remove to confirm what remains")
+    else:
+        rep.say("nothing was removed — paste a printed line, or re-run with --remove")
+    return rep.summary("stale-worktrees")
 
 
 # --------------------------------------------------------------------- lint --
@@ -2045,6 +2235,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = add("check", cmd_check, "static verification: manifest, hygiene, link state")
     check.add_argument("targets", nargs="*", metavar="global|<project>", help="default: everything")
+
+    stale = add(
+        "stale-worktrees",
+        cmd_stale_worktrees,
+        "scan for merged/stale worktrees; prints removal commands unless --remove",
+    )
+    stale.add_argument(
+        "--remove",
+        action="store_true",
+        help="execute the removals (dirty worktrees still skipped; branches via -d only)",
+    )
+    stale.add_argument(
+        "targets", nargs="*", metavar="<project>", help="default: every project plus this repo"
+    )
 
     add("list", cmd_list, "inventory of managed CLAUDE.md files and skills by tier")
 

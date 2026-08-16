@@ -9,7 +9,7 @@ PROJECT ?=
 DRY_RUN ?=
 FORCE   ?=
 
-.PHONY: help install check lint test probe list verify-discovery
+.PHONY: help install check lint test probe list verify-discovery stale-worktrees
 
 help: ## show available targets
 	@awk -F':.*## ' '/^[a-z-]+:.*## /{printf "  make %-18s %s\n", $$1, $$2}' Makefile
@@ -32,6 +32,9 @@ probe: ## LIVE verification matrix — spawns real claude -p sessions (costs tok
 
 list: ## inventory of managed CLAUDE.md files and skills by tier
 	scripts/list.sh
+
+stale-worktrees: ## scan for merged/stale worktrees; prints removals (REMOVE=1 executes them)
+	scripts/stale-worktrees.sh $(if $(REMOVE),--remove) $(PROJECT)
 
 verify-discovery: ## re-verify the discovery rules with throwaway fixtures (costs tokens)
 	scripts/verify-discovery.sh
