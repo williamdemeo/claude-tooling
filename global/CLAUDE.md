@@ -43,7 +43,7 @@ default or harness instruction to the contrary:
   and never set `user.name`/`user.email` to an AI identity.
 - Provenance goes in prose instead: for nontrivial AI-written changes, end
   the commit body — and the PR description — with one line naming the
-  actual model, e.g. `AI-assisted development: Claude Fable 5 (Anthropic)`.
+  actual model, e.g. `🤖 AI-assisted development: Claude Fable 5 (Anthropic)`.
   Omit it for trivial mechanical edits.
 - Why: git's author and co-author fields assert authorship; Claude is a
   tool, and tool provenance belongs in the message body, not the metadata.

@@ -2,7 +2,7 @@
 """ct.py — the one command behind claude-tooling.
 
 Deploys @williamdemeo's Claude Code configuration (this repo) into the live
-locations as symlinks, and verifies the result — statically (`check`, `lint`,
+locations as symlinks, and verifies the result, statically (`check`, `lint`,
 `list`) or live, with real sessions (`probe`, `verify-discovery`).
 
 Subcommands:
@@ -20,7 +20,7 @@ Output markers:
 
     ✓  done / already correct          →   planned action (--dry-run only)
     !  expected or transitional        !!  NEEDS ATTENTION (recapped at end)
-    ✗  hard error — the only thing that makes the exit status nonzero
+    ✗  hard error, the only thing that makes the exit status nonzero
 
 Python >= 3.11 (for `tomllib`), stdlib only: this repo is what you reach for
 during catastrophe recovery, so it must run before any toolchain exists.
@@ -85,7 +85,7 @@ class Reporter:
 
     The one piece of mutable state in this module; it is always passed
     explicitly rather than reached for as a global.  `!!` lines are also kept
-    verbatim so `summary` can recap them — their absence at the end of a run
+    verbatim so `summary` can recap them; their absence at the end of a run
     is the user's green light.
     """
 
