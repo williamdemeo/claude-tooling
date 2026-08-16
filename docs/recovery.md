@@ -39,8 +39,6 @@ thing you reach for during recovery. All the logic is `scripts/ct.py`; the
         scripts/verify-discovery.sh  # only if discovery behavior itself is in doubt
 
 5. **Not (yet) recovered by this repo** — restore by hand:
-   - `~/.claude/settings.json` (model, effortLevel, permissions,
-     `cleanupPeriodDays: 3650` — see docs/transcript-retention.md)
    - credentials (`claude` login), user-scope MCP servers (`~/.claude.json`
      — project-root `.mcp.json` files ARE recovered, from
      `projects/<p>/mcp.json`), auto-memory dirs and transcripts under

@@ -59,10 +59,11 @@ Enforcement is layered:
   `"attribution": {"commit": "", "pr": "", "sessionUrl": false}` — the
   supported Claude Code setting (empty text hides the commit/PR
   attribution; `sessionUrl: false` drops the `Claude-Session:` trailer on
-  web/Remote Control commits). `settings.json` is not yet deployed by
-  `install.sh`; absorbing it into the global tier is issue #5 (after the
-  Python port merges). Until then it is machine-local — recreate the block
-  by hand on a fresh machine (docs/recovery.md step 5 territory).
+  web/Remote Control commits). `settings.json` is managed by this repo
+  (issue #5): `global/settings.json` deploys as the `~/.claude/settings.json`
+  symlink via `make install`, so the attribution block recovers with
+  everything else. Editing the live file edits the repo working tree —
+  commit it, same as CLAUDE.md and skills.
 - **Web containers**: the fls setup script
   (`projects/fls/web-environment/setup-script.sh`, step 5) sets William's
   git identity and writes the same attribution block into the container's

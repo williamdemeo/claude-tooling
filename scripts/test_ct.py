@@ -1380,6 +1380,36 @@ class McpServerNamesTest(TempDirCase):
         self.assertEqual(ct.mcp_server_names(write(self.tmp / "list.json", "[]")), [])
 
 
+class GlobalSettingsTest(DeploymentFixture):
+    """The global settings.json member — presence-driven, like every
+    optional member."""
+
+    def test_absent_repo_settings_deploys_nothing(self) -> None:
+        result = self.invoke("install", "global")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((self.home / ".claude/settings.json").exists())
+        self.assertNotIn("~/.claude/settings.json", self.invoke("check").stdout)
+
+    def test_present_repo_settings_links_and_check_classifies(self) -> None:
+        write(self.root / "global/settings.json", '{"attribution": {"commit": ""}}\n')
+        result = self.invoke("install", "global")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        live = self.home / ".claude/settings.json"
+        self.assertTrue(live.is_symlink())
+        self.assertEqual(os.readlink(live), str(self.root / "global/settings.json"))
+        self.assertIn("~/.claude/settings.json", self.invoke("check").stdout)
+
+    def test_force_swaps_a_real_file_with_backup(self) -> None:
+        write(self.root / "global/settings.json", '{"policy": true}\n')
+        write(self.home / ".claude/settings.json", '{"machine": "local"}\n')
+        result = self.invoke("install", "--force", "global")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue((self.home / ".claude/settings.json").is_symlink())
+        backups = list((self.tmp / "backups").rglob("settings.json"))
+        self.assertTrue(backups, "the replaced real file must be backed up")
+        self.assertEqual(backups[0].read_text(), '{"machine": "local"}\n')
+
+
 class AddProjectTest(DeploymentFixture):
     def test_scaffolds_a_stanza_a_stub_and_a_visible_marker(self) -> None:
         result = self.invoke("add-project", "someorg/newthing", "--main", "master")

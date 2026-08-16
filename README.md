@@ -43,7 +43,7 @@ Whether a project keeps such config committed is a per-project decision recorded
     install.sh, scripts/*.sh two-line shims into the matching ct.py subcommand
     scripts/test_ct.py       unit suite (`make test`); tmp fixtures only
     Makefile                 install / check / lint / test / probe / list / verify-discovery
-    global/                  ~/.claude tier: CLAUDE.md + skills/<name>/
+    global/                  ~/.claude tier: CLAUDE.md, settings.json + skills/<name>/
     projects/<p>/CLAUDE.md   project instructions (symlinked to <parent>/CLAUDE.md)
     projects/<p>/claude/     project .claude members: skills/<name>/, hooks/, …
     projects/<p>/mcp.json    optional: MCP server registrations, deployed as

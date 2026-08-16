@@ -717,10 +717,15 @@ def link_worktrees_for(project: Project, root: Path, rep: Reporter, opts: Option
 
 
 def install_global(root: Path, rep: Reporter, opts: Options) -> None:
-    """Deploy the global tier: `~/.claude/CLAUDE.md` + per-skill links."""
+    """Deploy the global tier: `~/.claude/CLAUDE.md`, `settings.json` (when
+    the repo carries `global/settings.json` — presence-driven, like every
+    optional member) + per-skill links."""
     live = home() / ".claude"
     rep.say("global → ~/.claude")
     ensure_link(f"{root}/global/CLAUDE.md", live / "CLAUDE.md", "~/.claude/CLAUDE.md", rep, opts)
+    settings = root / "global" / "settings.json"
+    if settings.is_file():
+        ensure_link(str(settings), live / "settings.json", "~/.claude/settings.json", rep, opts)
     if not ensure_realdir(live / "skills", "~/.claude/skills", root, rep, opts):
         return
     for skill in subdirs(root / "global" / "skills"):
@@ -1280,6 +1285,15 @@ def check_global_state(root: Path, rep: Reporter) -> None:
         "~/.claude/CLAUDE.md",
         rep,
     )
+    settings = root / "global" / "settings.json"
+    if settings.is_file():
+        classify_link(
+            str(settings),
+            home() / ".claude/settings.json",
+            root,
+            "~/.claude/settings.json",
+            rep,
+        )
     for skill in subdirs(root / "global" / "skills"):
         classify_link(
             str(skill),
