@@ -1467,16 +1467,31 @@ class StaleWorktreesTest(DeploymentFixture):
         self.assertIn("DIRTY", result.stdout)
         self.assertNotIn("worktree remove", result.stdout)
 
+    def gone_upstream(self, branch: str) -> None:
+        """Track origin/<branch> with no such remote ref — the state a
+        squash-merge-then-delete leaves behind after a pruning fetch. The
+        remote must really exist (fetch refspec and all): the [gone]
+        classification resolves through it."""
+        self.git("remote", "add", "origin", ".")
+        self.git("config", f"branch.{branch}.remote", "origin")
+        self.git("config", f"branch.{branch}.merge", f"refs/heads/{branch}")
+
     def test_a_gone_upstream_is_reported(self) -> None:
-        # Configure wt1 to track origin/wt1 without such a remote ref
-        # existing — the state a squash-merge-then-delete leaves behind
-        # after a fetch with prune.
         self.make_project()
-        self.git("config", "branch.wt1.remote", "origin")
-        self.git("config", "branch.wt1.merge", "refs/heads/wt1")
+        self.gone_upstream("wt1")
         result = self.invoke("stale-worktrees")
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("upstream gone", result.stdout)
+
+    def test_an_existing_upstream_is_not_gone(self) -> None:
+        # A tracking ref that IS present must not read as gone — the
+        # failure mode of hand-building refs/remotes/<remote>/<name>.
+        self.make_project()
+        self.gone_upstream("wt1")
+        self.git("update-ref", "refs/remotes/origin/wt1", "HEAD")
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("upstream gone", result.stdout)
 
     def test_non_git_scan_roots_are_skipped_not_fatal(self) -> None:
         # The fixture's canonical_root (the repo copy) is not a git
@@ -1490,6 +1505,77 @@ class StaleWorktreesTest(DeploymentFixture):
         result = self.invoke("stale-worktrees", "nope")
         self.assertEqual(result.returncode, 1)
         self.assertIn("unknown target", result.stdout)
+
+    def test_removal_commands_are_posix_quoted(self) -> None:
+        cmd = ct.removal_command(Path("/m ain"), Path("/wt spa ce"), "we$ird;branch")
+        self.assertIn("'/wt spa ce'", cmd)
+        self.assertIn("'/m ain'", cmd)
+        self.assertIn("'we$ird;branch'", cmd)
+        plain = ct.removal_command(Path("/main"), Path("/wt"), None)
+        self.assertNotIn("branch -d", plain)
+
+    def test_a_spaced_worktree_path_survives_scan_and_print(self) -> None:
+        self.make_project()
+        self.git("worktree", "add", "-q", "-b", "wt-sp", "../worktrees/wt sp")
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("'" + str(self.parent / "worktrees/wt sp") + "'", result.stdout)
+
+    def test_an_unreadable_worktree_is_never_judged_or_removed(self) -> None:
+        # Losing the .git link file makes HEAD/status unreadable; the scan
+        # must skip it, and --remove must not touch it.
+        self.make_project()
+        (self.parent / "worktrees/wt1/.git").unlink()
+        result = self.invoke("stale-worktrees", "--remove")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("cannot judge", result.stdout)
+        self.assertNotIn("removed worktree", result.stdout)
+        self.assertTrue((self.parent / "worktrees/wt1").is_dir())
+
+    def test_failed_worktree_list_is_unscannable_not_clean(self) -> None:
+        self.assertIsNone(ct.worktree_entries(self.tmp / "no-such-repo"))
+        rep, buffer = capture()
+        with mock.patch.object(ct, "is_git_checkout", return_value=True):
+            ct.scan_stale_worktrees("p", self.tmp / "no-such-repo", rep, remove=False)
+        self.assertEqual(rep.n_err, 1, buffer.getvalue())
+        self.assertIn("unscannable", buffer.getvalue())
+
+    def test_detached_merged_is_offered_without_branch_deletion(self) -> None:
+        self.make_project()
+        self.git("worktree", "add", "-q", "--detach", "../worktrees/det")
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        det_lines = [ln for ln in result.stdout.splitlines() if "worktrees/det" in ln]
+        offered = [ln for ln in det_lines if "worktree remove" in ln]
+        self.assertTrue(offered, result.stdout)
+        self.assertNotIn("branch -d", offered[0])
+
+    def test_detached_equivalent_only_is_never_offered(self) -> None:
+        # Its exact commits are not on main (only their patches are), and
+        # there is no branch for -d to guard — removal could orphan them.
+        self.make_project()
+        self.git("worktree", "add", "-q", "--detach", "../worktrees/det")
+        det = self.parent / "worktrees/det"
+        write(det / "novel.txt", "detached work\n")
+        self.git("add", "novel.txt", cwd=det)
+        self.git("commit", "-qm", "novel", cwd=det)
+        sha = subprocess.run(
+            ["git", "-C", det, "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip()
+        # main gets the PATCH, not the commit. The committer date must
+        # differ, or a same-second cherry-pick of a same-parent same-tree
+        # commit reproduces the identical sha — and then it IS the commit.
+        subprocess.run(
+            ["git", "-C", self.parent / "main", "-c", "user.email=t@localhost",
+             "-c", "user.name=t", "cherry-pick", sha],
+            check=True,
+            capture_output=True,
+            env={**os.environ, "HOME": str(self.home), "GIT_COMMITTER_DATE": "2030-01-02T03:04:05"},
+        )
+        result = self.invoke("stale-worktrees", "--remove")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ref it first, nothing offered", result.stdout)
+        self.assertTrue(det.is_dir())
 
     def branch_exists(self, branch: str) -> bool:
         return (
@@ -1526,8 +1612,7 @@ class StaleWorktreesTest(DeploymentFixture):
         write(wt / "novel.txt", "unmerged work\n")
         self.git("add", "novel.txt", cwd=wt)
         self.git("commit", "-qm", "novel", cwd=wt)
-        self.git("config", "branch.wt1.remote", "origin")
-        self.git("config", "branch.wt1.merge", "refs/heads/wt1")
+        self.gone_upstream("wt1")
         result = self.invoke("stale-worktrees", "--remove")
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("removed worktree", result.stdout)
