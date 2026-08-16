@@ -158,7 +158,12 @@ whole-dir symlink that file would have landed in this repo.
   per-checkout config: its `env.AGDA_ALGEBRAS_ROOT` is `${PWD}` (rules
   9–10), which resolves to each checkout root as long as sessions launch
   there — the standing ritual anyway, and air's relative `command` path
-  has always had the same requirement.
+  has always had the same requirement. agda-native-air is the worked
+  example of the committed side of this per-member split (issue #8): its
+  `.mcp.json` is PRODUCT config — tracked in air since 2026-03, relative
+  `./scripts/run-server.sh`, usable by any clone and visible to web
+  containers — so this repo deliberately carries no
+  `projects/agda-native-air/mcp.json` and manages nothing there.
 - **git + a POSIX shell + python3 ≥ 3.11 stdlib**, no flake, no pip: this
   repo is the thing reached for during recovery, so it must run before any
   toolchain exists. 3.11 is the floor because `tomllib` parses the
