@@ -9,6 +9,15 @@ Every rule here is enforced taste, not a suggestion. When existing code in
 the project conflicts with this skill, match the project and flag the
 conflict; when writing new code, this skill wins.
 
+**Scope carve-out**: a deliberately self-contained recovery tool — a
+single stdlib-only file that must run on a bare machine with nothing to
+import (claude-tooling's `scripts/ct.py` is the example) — keeps its own
+lightweight idiom (frozen dataclasses, a Reporter, one Fatal exception)
+instead of vendoring the utils package. The functional spirit (pure
+core, effects at the edges, typed throughout, `mypy --strict`) still
+applies; the `Result`/utils machinery is for repos that carry the utils
+package. Everything else in this skill is about those repos.
+
 ## The rules
 
 1. **Functional by default**: total functions, structural recursion, no
