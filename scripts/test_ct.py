@@ -1380,6 +1380,57 @@ class McpServerNamesTest(TempDirCase):
         self.assertEqual(ct.mcp_server_names(write(self.tmp / "list.json", "[]")), [])
 
 
+class GlobalSettingsTest(DeploymentFixture):
+    """The global settings.json member — presence-driven, like every
+    optional member."""
+
+    def test_absent_repo_settings_deploys_nothing(self) -> None:
+        result = self.invoke("install", "global")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((self.home / ".claude/settings.json").exists())
+        self.assertNotIn("~/.claude/settings.json", self.invoke("check").stdout)
+
+    def test_present_repo_settings_links_and_check_classifies(self) -> None:
+        write(self.root / "global/settings.json", '{"attribution": {"commit": ""}}\n')
+        result = self.invoke("install", "global")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        live = self.home / ".claude/settings.json"
+        self.assertTrue(live.is_symlink())
+        self.assertEqual(os.readlink(live), str(self.root / "global/settings.json"))
+        self.assertIn("~/.claude/settings.json", self.invoke("check").stdout)
+
+    def test_force_swaps_a_real_file_with_backup(self) -> None:
+        write(self.root / "global/settings.json", '{"policy": true}\n')
+        write(self.home / ".claude/settings.json", '{"machine": "local"}\n')
+        result = self.invoke("install", "--force", "global")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue((self.home / ".claude/settings.json").is_symlink())
+        backups = list((self.tmp / "backups").rglob("settings.json"))
+        self.assertTrue(backups, "the replaced real file must be backed up")
+        self.assertEqual(backups[0].read_text(), '{"machine": "local"}\n')
+
+    def test_a_dangling_repo_link_is_an_error_not_silence(self) -> None:
+        # Presence-driven must not mean presence-blind: removing the repo
+        # source after installation leaves a dangling live symlink, and
+        # Claude Code then reads NO user settings at all.
+        self.make_project()
+        write(self.root / "global/settings.json", '{"policy": true}\n')
+        self.assertEqual(self.invoke("install", "global").returncode, 0)
+        (self.root / "global/settings.json").unlink()
+        result = self.invoke("check")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("repo link without a source", result.stdout)
+
+    def test_a_real_unmanaged_live_settings_is_not_flagged(self) -> None:
+        # No repo source AND a real live file = unmanaged local config,
+        # none of this repo's business.
+        self.make_project()
+        write(self.home / ".claude/settings.json", '{"machine": "local"}\n')
+        result = self.invoke("check")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("repo link without a source", result.stdout)
+
+
 class AddProjectTest(DeploymentFixture):
     def test_scaffolds_a_stanza_a_stub_and_a_visible_marker(self) -> None:
         result = self.invoke("add-project", "someorg/newthing", "--main", "master")
