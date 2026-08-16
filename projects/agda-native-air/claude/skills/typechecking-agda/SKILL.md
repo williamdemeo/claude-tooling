@@ -14,6 +14,21 @@ A gold solution or Agda module is not done until it type-checks under the pinned
 3. To check every committed gold solution, iterate the `gold` paths listed in `data/benchmarks/benchmark-index.jsonl`.
 4. Do not stage generated artifacts: `*.agdai` and the nix-generated `agda/libraries` are gitignored.
 
+## Checking a scratch module (observing what Agda actually prints)
+
+Work on `agda-mcp` regularly needs Agda's *output* on a throwaway module — the exact text of an error, the shape of a warning header, whether a construct even reaches the checker.  Write the module outside the repo (the session scratchpad), then, from inside the shell:
+
+```
+agda --library-file="$REPO_ROOT/agda/libraries" -i "$SCRATCH_DIR" "$SCRATCH_DIR/Mod.agda"
+```
+
+Both flags are load-bearing, and omitting either costs a confusing failure:
+
++  Without `--library-file`, the wrapper's `--library agda-dojang` resolves against the nix-store default library file and Agda exits with `error: [LibraryError] / Library 'agda-dojang' not found` — even for a module importing nothing but `Agda.Builtin`.
++  Without `-i <dir-of-the-file>`, Agda resolves the module name against the include path it does have and exits with `[ModuleNameDoesntMatchFileName]`, listing every place the module could have lived.  The module name must still match the file stem; sibling helper modules in the same scratch directory resolve automatically once `-i` is set.
+
+Agda 2.8.0 writes diagnostics to **stdout**, not stderr, so capture with `2>&1` rather than assuming stderr.
+
 ## Notes specific to this repo
 
 +  Each benchmark module imports `AgdaDojang.Debug`; that resolves only inside the flake shell, where the `agda-dojang` library is registered — which is why a bare `agda` fails.
