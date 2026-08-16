@@ -31,22 +31,29 @@ The engine lives in `~/git/williamdemeo/github-project/main/scripts/` (`gh_proje
     gh issue edit N --repo OWNER/REPO --title "[M0-11] ..."
     ```
 
-4.  Wire thin Makefile targets that call the engine from a checkout (until github-project ships a Nix flake package; then switch to a pinned flake input):
+4.  Wire the engine.  Flake-repo targets (primary, verified on agda-native-air): add the input `github-project.url = "github:williamdemeo/github-project";`, re-export its apps under a prefix, and call them from make — a `flake.lock` entry then pins the engine and `nix flake update github-project` upgrades it deliberately.
+
+    ```nix
+    apps = nixpkgs.lib.genAttrs systems (system:
+      nixpkgs.lib.mapAttrs'
+        (name: app: nixpkgs.lib.nameValuePair "ghproject-${name}" app)
+        github-project.apps.${system});
+    ```
 
     ```make
-    GHPROJECT_DIR ?= $(HOME)/git/williamdemeo/github-project/main
+    GHPROJECT_DIR ?=
+    ifneq (,$(GHPROJECT_DIR))
+    GHPROJECT_LINT := python3 "$(GHPROJECT_DIR)/scripts/gh_project_lint.py"
+    else
+    # `\#`: an unescaped # starts a comment even inside an assignment.
+    GHPROJECT_LINT := nix run .\#ghproject-lint --
+    endif
 
-    _check-ghproject:
-    	@test -f "$(GHPROJECT_DIR)/scripts/gh_project_update.py" || { \
-    	  echo "error: github-project engine not found at $(GHPROJECT_DIR)"; exit 1; }
-
-    project-lint: _check-ghproject
-    	python3 "$(GHPROJECT_DIR)/scripts/gh_project_lint.py" docs/GITHUB_PROJECT.md
-    project-update: _check-ghproject
-    	python3 "$(GHPROJECT_DIR)/scripts/gh_project_update.py" docs/GITHUB_PROJECT.md
-    project-update-check: _check-ghproject
-    	python3 "$(GHPROJECT_DIR)/scripts/gh_project_update.py" docs/GITHUB_PROJECT.md --check
+    project-lint:
+    	$(GHPROJECT_LINT) docs/GITHUB_PROJECT.md
     ```
+
+    (update / update-check follow the same shape; keep `GHPROJECT_DIR` as the checkout escape hatch for engine development and Nix-less machines.)  For a repo without a flake, the checkout shape alone — `GHPROJECT_DIR ?= $(HOME)/git/williamdemeo/github-project/main` with a `test -f` guard — still works; the engine is stdlib-only Python.  A fresh non-adoption project created FROM the template instead runs its `make init`, which wires all of this automatically.
 
 5.  Retire the old order: delete any vendored roadmap scripts, freeze the legacy plan file (banner at top declaring it historical and pointing at `GITHUB_PROJECT.md`), and repoint live-status cross-references (README, CONTRIBUTING, issue templates, architecture docs).
 
