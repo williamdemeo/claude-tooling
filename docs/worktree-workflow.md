@@ -54,6 +54,24 @@ resolve to the right checkout only from its root.
   73 fls branches tracked upstreams already deleted at origin). Cleanup is
   its own careful task: see `docs/kickoffs/fls-worktree-cleanup.md`.
 
+## Retiring worktrees
+
+`make stale-worktrees` (or `scripts/stale-worktrees.sh [<project>…]`) scans
+every manifest project — plus this repo itself — and reports each linked
+worktree as active, merged, patch-equivalent (rebased), or tracking an
+upstream that is gone as of the last fetch (the squash-merge signal). It
+PRINTS the removal command for each clean stale worktree and executes
+nothing; removal stays a human paste of a printed line:
+
+    git -C <main-checkout> worktree remove <path> && \
+        git -C <main-checkout> branch -d <branch>
+
+`git branch -d` (never `-D`) is the guard — it refuses branches not merged
+into HEAD, so even a wrong verdict cannot lose commits. Dirty worktrees are
+reported but never get a removal line. For a mass cleanup (a hundred
+worktrees, mixed upstreams), use the `worktree-forest-cleanup` skill
+instead — this command is its everyday scanning half.
+
 ## Who creates worktrees where (fls specifics)
 
 From the fls conventions: William's worktrees carry unprefixed branch

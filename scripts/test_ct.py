@@ -1431,6 +1431,67 @@ class GlobalSettingsTest(DeploymentFixture):
         self.assertNotIn("repo link without a source", result.stdout)
 
 
+class StaleWorktreesTest(DeploymentFixture):
+    """The advisory scan: verdicts and printed (never executed) removals.
+
+    make_project()'s wt1 branches off main's tip with no commits of its
+    own, so its HEAD is an ancestor of main's — the 'merged' shape.
+    """
+
+    def test_a_merged_clean_worktree_gets_a_removal_command(self) -> None:
+        self.make_project()
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("wt1 [wt1] — merged", result.stdout)
+        self.assertIn(f"git -C {self.parent / 'main'} worktree remove", result.stdout)
+        self.assertIn("branch -d wt1", result.stdout)
+        self.assertIn("nothing was removed", result.stdout)
+        self.assertTrue((self.parent / "worktrees/wt1").is_dir())  # advisory only
+
+    def test_an_unmerged_worktree_is_active_with_no_command(self) -> None:
+        self.make_project()
+        wt = self.parent / "worktrees/wt1"
+        write(wt / "novel.txt", "unmerged work\n")
+        self.git("add", "novel.txt", cwd=wt)
+        self.git("commit", "-qm", "novel", cwd=wt)
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("wt1 [wt1] — active", result.stdout)
+        self.assertNotIn("worktree remove", result.stdout)
+
+    def test_a_dirty_stale_worktree_is_flagged_but_gets_no_command(self) -> None:
+        self.make_project()
+        write(self.parent / "worktrees/wt1/scratch.txt", "uncommitted\n")
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("DIRTY", result.stdout)
+        self.assertNotIn("worktree remove", result.stdout)
+
+    def test_a_gone_upstream_is_reported(self) -> None:
+        # Configure wt1 to track origin/wt1 without such a remote ref
+        # existing — the state a squash-merge-then-delete leaves behind
+        # after a fetch with prune.
+        self.make_project()
+        self.git("config", "branch.wt1.remote", "origin")
+        self.git("config", "branch.wt1.merge", "refs/heads/wt1")
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("upstream gone", result.stdout)
+
+    def test_non_git_scan_roots_are_skipped_not_fatal(self) -> None:
+        # The fixture's canonical_root (the repo copy) is not a git
+        # checkout; the self-scan must degrade to a warning.
+        self.make_project()
+        result = self.invoke("stale-worktrees")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("not a git checkout — skipped", result.stdout)
+
+    def test_unknown_target_is_refused(self) -> None:
+        result = self.invoke("stale-worktrees", "nope")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unknown target", result.stdout)
+
+
 class AddProjectTest(DeploymentFixture):
     def test_scaffolds_a_stanza_a_stub_and_a_visible_marker(self) -> None:
         result = self.invoke("add-project", "someorg/newthing", "--main", "master")

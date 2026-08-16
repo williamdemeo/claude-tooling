@@ -39,10 +39,12 @@ Whether a project keeps such config committed is a per-project decision recorded
     projects.toml            manifest: one entry per project (parent dir, main
                              checkout, mode) — drives every command
     scripts/ct.py            the implementation: install / link-worktrees / check /
-                             list / lint / probe / verify-discovery / add-project
+                             list / lint / stale-worktrees / probe /
+                             verify-discovery / add-project
     install.sh, scripts/*.sh two-line shims into the matching ct.py subcommand
     scripts/test_ct.py       unit suite (`make test`); tmp fixtures only
-    Makefile                 install / check / lint / test / probe / list / verify-discovery
+    Makefile                 install / check / lint / test / probe / list /
+                             stale-worktrees / verify-discovery
     global/                  ~/.claude tier: CLAUDE.md, settings.json + skills/<name>/
     projects/<p>/CLAUDE.md   project instructions (symlinked to <parent>/CLAUDE.md)
     projects/<p>/claude/     project .claude members: skills/<name>/, hooks/, …
