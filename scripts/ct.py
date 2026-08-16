@@ -1286,13 +1286,24 @@ def check_global_state(root: Path, rep: Reporter) -> None:
         rep,
     )
     settings = root / "global" / "settings.json"
+    live_settings = home() / ".claude/settings.json"
     if settings.is_file():
         classify_link(
             str(settings),
-            home() / ".claude/settings.json",
+            live_settings,
             root,
             "~/.claude/settings.json",
             rep,
+        )
+    elif live_settings.is_symlink() and points_into(os.readlink(live_settings), root):
+        # A real live settings.json is unmanaged local config and none of
+        # our business; a repo-pointing symlink without its source is our
+        # own leftover — and worse than serving nothing, it makes Claude
+        # Code read NO user settings at all (the attribution policy
+        # silently off).
+        rep.fail(
+            "~/.claude/settings.json → repo link without a source "
+            "(no global/settings.json — remove the link or restore the file)"
         )
     for skill in subdirs(root / "global" / "skills"):
         classify_link(
