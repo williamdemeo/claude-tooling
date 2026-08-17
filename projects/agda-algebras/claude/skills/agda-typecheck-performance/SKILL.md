@@ -167,6 +167,64 @@ Only then look at the mathematics:
    the profiler shows unification churn (`Typing.CheckLHS.UnifyIndices`,
    `Typing.With`).
 
+## When it does not finish at all: bisect, do not profile
+
+`--profile=internal` prints nothing when the run dies of heap exhaustion, so a
+module that *never finishes* needs a different method: **bisect the file**.  Copy the
+module under a scratch name, truncate it after a candidate definition, and time that:
+
+```bash
+L=$(grep -n "#### Some heading" src/Path/To/Mod.lagda.md | head -1 | cut -d: -f1)
+head -n $((L-1)) src/Path/To/Mod.lagda.md \
+  | sed 's/module Path.To.Mod where/module Path.To.Scratch where/' \
+  > src/Path/To/Scratch.lagda.md
+time (timeout 300 agda +RTS -M6G -A128M -RTS src/Path/To/Scratch.lagda.md)
+```
+
+Halve until one definition separates "seconds" from "heap exhausted".  Two cautions
+learned the hard way: `grep -n … | cut -d: -f1` breaks when the pattern matches twice
+(always `head -1`), and a `_` in a test term can *itself* be the blowup — a
+metavariable under a stuck `lookup` on a large literal vector sends the unifier
+hunting — so pass arguments explicitly when probing.
+
+## The cost is often the *use*, not the definition
+
+The blowups below all share a shape: a definition that is cheap to check becomes
+ruinous one line later, when something forces it.  Measured on the `A5` (carrier 60)
+filter-ideal work of #530, where the verified prefix cost 9 s and a single further
+application exhausted a 32 GB heap.
+
++  **`abstract` is scoped to the module, not the block.**  Its definitions stay
+   transparent to everything else in the module that defines them, so wrapping an
+   expensive proof in `abstract` next to its consumer changes nothing.  Sealing works
+   across a module boundary; within one module use **`opaque`**, which is by-name.
+   This is the single most misleading of the five — it looks like a fix and is not.
+
++  **`from-yes` is cheap to state, expensive to apply.**  Checking
+   `p : P; p = from-yes d` needs only enough reduction to see `d` says `yes`.
+   *Applying* `p` forces the proof term, which drags in whatever the decision's
+   payload mentions.  A decision costing milliseconds at its definition can be
+   unusable one line later, so watch for a `from-yes` result that is *applied* rather
+   than merely passed along.
+
++  **A module application at concrete arguments re-instantiates the module.**  Writing
+   a relation as `Coset._∼_ 𝒢 K K-sg` re-instantiates `Coset` — and everything
+   `Coset` itself instantiates, e.g. `Algebra.Properties.Group` — once per concrete
+   argument.  Write the relation out directly and consume the module's lemmas *once,
+   generically*, inside an opaque block.
+
++  **Pattern-matching a `Σ` argument blocks reduction where laziness was wanted.**
+   `f (K , K?) = …` forces its argument open; `f K = … proj₁ K … proj₂ K …` lets
+   `f K` reduce while `K` stays stuck.  That is the difference between a goal that
+   normalizes a concrete structure and one that does not.
+
+The general lesson: for a large concrete instance, keep every *proof* opaque and every
+*computation* transparent, and never let a goal mention a concrete bundle whose
+laws are decision sweeps.  If that cannot be arranged, the structure is wrong — build
+the object so the expensive bundle never enters the types (for a group action, e.g.,
+build the unary algebra straight from the multiplication table rather than from a
+`Group` value).
+
 ## Step 4 — verify the change
 
 A performance change must not change the mathematics.
