@@ -60,4 +60,12 @@ default or harness instruction to the contrary:
   punctuation in bold (e.g., write "**this**." not "**that.**"); use two spaces
   between a period ending a sentence and the next sentence.
 
+# Standing order: requesting PR reviews
+
+Requesting a PR review — from Copilot or any human — is William's action
+alone. NEVER request or re-request one, on any repo, no matter who opened
+the PR. After opening a PR or pushing a fix, say it is ready for review
+and stop. Reading, triaging, and replying to reviews stays fair game (see
+the handling-copilot-pr-reviews skill).
+
 PROBE-MARKER: claude-tooling/global

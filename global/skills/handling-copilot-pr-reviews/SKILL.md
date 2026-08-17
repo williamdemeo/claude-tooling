@@ -1,6 +1,6 @@
 ---
 name: handling-copilot-pr-reviews
-description: Read, triage, and reply to a GitHub Copilot code review on a pull request — including the suppressed findings that never appear as inline comments and are invisible to the obvious API call. Use whenever asked to wait for, assess, address, or respond to PR review comments, or when a Copilot review needs requesting or re-requesting after pushing a fix.
+description: Read, triage, and reply to a GitHub Copilot code review on a pull request — including the suppressed findings that never appear as inline comments and are invisible to the obvious API call. Use whenever asked to wait for, assess, address, or respond to PR review comments. Requesting (and re-requesting) a review is WILLIAM'S action alone — never request one; the request command is recorded here only for him to paste.
 ---
 
 # Handling a Copilot review on a PR
@@ -45,9 +45,13 @@ filter written for one silently matches nothing on the other:
 --jq '[.[] | select(.user.login=="Copilot")] | length'
 ```
 
-## Requesting a review, and re-requesting after a fix
+## Requesting a review — William only, never a session
 
-Copilot does **not** re-review when you push.  Each round must be requested:
+Requesting (and re-requesting) a Copilot review is WILLIAM'S action, never a
+session's — creating or updating a PR does not entitle you to summon a
+reviewer.  After pushing a fix, say the PR is ready for another round and
+STOP.  The command below is recorded only so William can paste it (Copilot
+does **not** re-review on push; every round needs an explicit request):
 
 ```sh
 gh api -X POST "repos/$OWNER_REPO/pulls/$PR/requested_reviewers" \
@@ -56,8 +60,8 @@ gh api -X POST "repos/$OWNER_REPO/pulls/$PR/requested_reviewers" \
 
 It returns the PR object with `requested_reviewers: []` — that is normal for the
 bot, not a failure.  A review typically lands within ~15 minutes.  Rounds tend to
-find progressively less; stop when one comes back with no comments *and* no
-suppressed block, and say so rather than looping indefinitely.
+find progressively less; when one comes back with no comments *and* no
+suppressed block, say so rather than suggesting another round.
 
 ## Triage: verify before agreeing or disagreeing
 

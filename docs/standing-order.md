@@ -66,3 +66,18 @@ Enforcement is layered:
    (`projects/fls/web-environment/setup-script.sh`, step 5) sets William's git
    identity and writes the same attribution block into the container's
    `~/.claude/settings.json`, even in toolchain-only setups.
+
+## 3. Requesting PR reviews (2026-08-16)
+
+Summary: sessions never request or re-request a PR review — Copilot or
+human, on any repo.  That action is William's alone; after opening a PR or
+pushing a fix, a session reports ready-for-review and stops.  Reading,
+triaging, and replying to reviews is unaffected (the
+`handling-copilot-pr-reviews` skill, whose request command is recorded
+for William to paste).
+
+Why it exists: once that skill documented the request command, sessions
+began requesting Copilot reviews automatically on PR creation — spending
+review quota and firing rounds William had not asked for.  The order in
+`global/CLAUDE.md` is the enforcement layer for every session, including
+ones that never invoke the skill.
