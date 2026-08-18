@@ -40,6 +40,40 @@ After each push, background-watch: `gh pr checks N --watch --fail-fast`
 (exit 0 = all green). `push-artifacts-to-branch` passing implies the Agda,
 Haskell, and mkdocs builds all succeeded.
 
+### Two CI systems — Hydra checks what GitHub Actions does not
+Hydra posts its own `ci/hydra-build:packages.<pkg>.<system>` checks. GitHub
+Actions can be fully green while Hydra is red, so always read the whole roll-up:
+
+    gh pr view N --json statusCheckRollup \
+      --jq '.statusCheckRollup[] | "\(.conclusion)\t\(.name)"'
+
+The gap that bites: `formal-ledger-agda` runs a bare `nix build`, whose default
+package is `formal-ledger` (the `src/` library only). The separate Agda library
+in `formal-ledger-test/` is built by Hydra alone, as
+`packages.formal-ledger-test.{x86_64-linux,aarch64-darwin}`.
+
+Read a Hydra log (step index is the failing step named on the build page):
+
+    curl -sL "https://ci.iog.io/build/<build-id>/nixlog/<step>/raw" | tail -40
+
+Reproduce locally instead of guessing — `formal-ledger` substitutes from
+cache.iog.io, so the test library then builds in seconds:
+
+    nix build .#formal-ledger-test --no-link
+
+### Two recurring breakages the green jobs miss
+1.  Adding a field to a structure record under `src/Ledger/Core/Specification/`
+    (e.g. `CryptoStructure`) breaks `formal-ledger-test`. Its
+    `Test.LedgerImplementation` builds those records module-style, as
+    `record { Implementation ; … }`, so a field with no counterpart in
+    `module Implementation` surfaces as `[UnsolvedConstraints]` on a stuck
+    instance plus `[UnsolvedMetaVariables]` at the `record` expression. Fix by
+    adding the matching definition to that module.
+2.  Changing an exported `*Step`'s signature needs the new type re-exported from
+    `build-tools/static/hs-src/src/MAlonzo/Code/Ledger/<Era>/Foreign/API.hs`.
+    The `hs / build` job compiles the library either way, so a missing
+    re-export is invisible in CI and only bites consumers.
+
 ## Branch sync when history moved (rebases/rewrites are routine here)
 Never pull; check patch-equivalence first:
 
