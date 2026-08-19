@@ -24,9 +24,35 @@ Guidance for Claude Code working in this repository.  Keep changes consistent wi
 
 This project *deliberately avoids* the libraries the IOG formal-ledger-specifications repo is built on: agda-sets (abstract set theory), agda-stdlib-classes, and agda-stdlib-meta (tactics / typeclass machinery).  Do not introduce dependencies on them unless explicitly directed or unless there is a clear justification for doing so; do not import fls idioms that presuppose them.  Conventions from fls sessions do not transfer here.
 
-## Agda and corpus-quality conventions
+## Agda development
 
-These proof terms are first-class training data.  Optimize for legibility and stability, not cleverness.
+### try agda-mcp first
+
+The agda-mcp server (from the agda-native-air project) exists so the agent can
+develop Agda the way humans do: hole-driven, with instant feedback from the
+type-checker, instead of composing a whole module and iterating on batch errors.
+Until further notice, every session that writes or modifies Agda in this project does
+the following:
+
++  BEFORE writing the first line of Agda, look for the agda-mcp tools: run ToolSearch
+   with query "+agda" and load what it returns.  If the server is not connected, note
+   that once in the final message and use the CLI workflow.
++  Prefer hole-driven development while drafting: leave `?` holes, load the file,
+   query each goal's type and context, propose candidate terms (give/refine), and let
+   the checker's response drive the next step.  Batch-typechecking the whole module
+   remains the FINAL gate before declaring work done, not the development loop.
++  Field reports are a deliverable.  End the session's final message with a short
+   agda-mcp report: which tools were used, what  worked, what was awkward or missing,
+   and, equally valuable, whether the CLI loop was genuinely more efficient (say why).
+   Append the same report to
+   ~/git/formalverification/agda-native-air/main/docs/mcp-field-reports.md
+   (create it if missing).
++  Do not perform enthusiasm.  If agda-mcp slowed the work down, the report should
+   say exactly that; the point is real evidence in both directions.
+
+### Corpus-quality conventions
+
+Proof terms are first-class training data.  Optimize for legibility and stability, not cleverness.
 
 +  Prefer many small, focused theorems over a few large ones.
 +  Prefer named helper lemmas over inlined or opaque `rewrite` chains.  This is not only style: a `with` (or `rewrite`) inside a proof abstracts the *whole* goal, and when the goal unfolds into the generic interpretation machinery the coverage check of the generated auxiliary is expensive — measured at 15 s in one module, 0.9 s once the split moved into a lemma taking the `Dec` value as an argument.

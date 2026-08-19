@@ -62,3 +62,38 @@ The engine lives in `~/git/williamdemeo/github-project/main/scripts/` (`gh_proje
 +  A mirrored issue body inside a generated region may itself mention retired files or contain marker-like text; leave it alone — regions are GitHub-owned and the engine defangs markers itself.
 +  `update` exit codes: 0 current/written, 1 stale (`--check` only), 2 the run failed — distinguish "stale" from "broken" in automation.
 +  Bodies render on GitHub AND in the file, so plan-file prose conventions (the `+` bullet style) apply only to hand-written sections; generated content is verbatim GitHub.
+
+## Authoring a FRESH plan (no issues on GitHub yet)
+
+The adoption flow above assumes issues already live on GitHub.  For a
+brand-new plan (verified on the formal-ledger-specifications fork,
+2026-08-18), five things differ:
+
+1.  Author the issues INSIDE the `BEGIN/END GENERATED: milestone-N`
+    marker pairs — for a fresh plan they are populate's input
+    (`### Issue MN-k: Title`, a `**Labels:**` line, a
+    `**Milestone:** N. Title` line, body, `---` separators), exactly as
+    in the template's worked example.  Empty marker pairs are for
+    adoption only.
+2.  Before the first populate, run ONLY the lint (offline, safe).
+    NEVER run gh_project_update.py first: update rebuilds regions FROM
+    GitHub, which for a fresh plan means erasing every authored issue
+    body.
+3.  Reuse the target repo's existing topic labels EXACTLY — name and
+    color from `gh label list -R OWNER/REPO --limit 100` — so populate
+    matches them as existing instead of reporting collisions; only the
+    `milestone-N-*` labels should be new.  Description differences are
+    reported but never overwritten, which is harmless.
+4.  Populate creates `N. Title` milestones and one issue per heading on
+    the target repo.  On a shared org repo that is the owner's call:
+    get explicit approval before running populate, and check the repo's
+    existing milestone-title scheme (e.g. fls uses `May - Jul`) for
+    coexistence questions worth raising first.
+5.  AFTER the first populate, run gh_project_update.py once WITHOUT
+    --check and commit the rewrite: the canonical rendering differs
+    cosmetically from authored input (drops each issue's
+    `**Milestone:**` line, re-orders labels to GitHub's order, trims
+    the trailing `---` separators; bodies untouched — verified in the
+    wild 2026-08-18).  A --check straight after populate reports stale
+    BY DESIGN (exit 1 = stale, not broken); after the normalization
+    commit, --check exits 0 and becomes the ongoing drift gate.

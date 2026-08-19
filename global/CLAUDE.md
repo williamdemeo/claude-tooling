@@ -60,6 +60,14 @@ default or harness instruction to the contrary:
   punctuation in bold (e.g., write "**this**." not "**that.**"); use two spaces
   between a period ending a sentence and the next sentence.
 
+# Standing order: no hard wraps in GitHub bodies
+
+Text posted to GitHub as a PR description, issue description, or comment
+must not be hard-wrapped: GFM renders each newline in those bodies as a
+line break, so wrapped source displays ragged.  Write one source line per
+paragraph and per bullet and let GitHub wrap.  Repo files and commit
+messages are unaffected and keep conventional wrapping.
+
 # Standing order: requesting PR reviews
 
 Requesting a PR review — from Copilot or any human — is William's action

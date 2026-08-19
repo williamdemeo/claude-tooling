@@ -1,5 +1,10 @@
 {
   "cleanupPeriodDays": 3650,
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
   "permissions": {
     "defaultMode": "auto"
   },
@@ -7,10 +12,5 @@
   "effortLevel": "xhigh",
   "tui": "fullscreen",
   "theme": "dark",
-  "skipAutoPermissionPrompt": true,
-  "attribution": {
-    "commit": "",
-    "pr": "",
-    "sessionUrl": false
-  }
+  "skipAutoPermissionPrompt": true
 }

@@ -7,6 +7,8 @@ description: Type-check Agda modules in the agda-algebras repository after editi
 
 Type-checking is the only test this library has; a change is not done until it type-checks.
 
+This skill is the final gate, not the development loop.  When the agda-mcp server is connected (see the standing order in the project CLAUDE.md), draft Agda hole-by-hole through it and reserve the full nix develop typecheck for the end of a work unit.
+
 ## Procedure
 
 1. Enter the toolchain.  All Agda commands run inside the flake shell: `nix develop --command <cmd>`.  The flake pins Agda 2.8.0 and standard-library 2.3.

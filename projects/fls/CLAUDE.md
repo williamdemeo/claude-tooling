@@ -39,6 +39,30 @@ without approval.  Correctness over speed.
    spaces between a period and a new sentence.
 +  Typecheck any edited Agda before declaring work done (agda-typecheck skill).
 
+## Agda development: try agda-mcp first
+
+The agda-mcp server (from the agda-native-air project) exists so the agent can
+develop Agda the way humans do: hole-driven, with instant feedback from the
+type-checker, instead of composing a whole module and iterating on batch errors.
+Until further notice, every session that writes or modifies Agda in this project does
+the following:
+
++  BEFORE writing the first line of Agda, look for the agda-mcp tools: run ToolSearch
+   with query "+agda" and load what it returns.  If the server is not connected, note
+   that once in the final message and use the CLI workflow.
++  Prefer hole-driven development while drafting: leave `?` holes, load the file,
+   query each goal's type and context, propose candidate terms (give/refine), and let
+   the checker's response drive the next step.  Batch-typechecking the whole module
+   remains the FINAL gate before declaring work done, not the development loop.
++  Field reports are a deliverable.  End the session's final message with a short
+   agda-mcp report: which tools were used, what  worked, what was awkward or missing,
+   and, equally valuable, whether the CLI loop was genuinely more efficient (say why).
+   Append the same report to
+   ~/git/formalverification/agda-native-air/main/docs/mcp-field-reports.md
+   (create it if missing).
++  Do not perform enthusiasm.  If agda-mcp slowed the work down, the report should
+   say exactly that; the point is real evidence in both directions.
+
 ## Property tracking
 
 +  Catalog: `build-tools/properties.yaml`.  Status is DERIVED from the Agda;
