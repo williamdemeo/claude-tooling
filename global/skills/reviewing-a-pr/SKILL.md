@@ -28,6 +28,7 @@ Read 100% of the new and changed lines, and read them for failure, not for confo
 
 +  `catch SomeException` sitting inside or beside a `timeout`, or anywhere a `killThread` can land: it swallows the asynchronous exception and converts a timeout or cancellation into a misreported crash, or keeps a "stopped" thread alive.
 +  Unmasked take/put windows on shared slots (MVar and kin): an async exception between the take and the put leaks the slot empty, and every later user blocks forever.
++  A shutdown/closed latch checked under lock A guarding nothing acquired later under lock B: a full shutdown can run between the two acquisitions, and the request then creates the very resource shutdown existed to prevent.  Re-check the latch under the lock that guards the acquisition; found in the wild after three bot rounds and three author rounds missed it.
 +  Cleanup that runs only on the happy exit: shutdown on EOF but not on the exception path (missing `finally`); a dead resource replaced without closing the old one (leaked handles per respawn).
 +  Budget seams: two full timeouts stacked across a spawn-then-request boundary, so the documented per-request bound silently doubles.
 +  Unbounded writes: the read side has a deadline, the send side can block forever on a full pipe.
