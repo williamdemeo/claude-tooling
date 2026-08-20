@@ -12,7 +12,7 @@ This skill is the final gate, not the development loop.  When the agda-mcp serve
 ## Procedure
 
 1. Enter the toolchain.  All Agda commands run inside the flake shell: `nix develop --command <cmd>`.  The flake pins Agda 2.8.0 and standard-library 2.3.
-2. Check the edited module(s) first — fast, and it localizes errors: `nix develop --command agda src/Path/To/Module.lagda.md`.
+2. Check the edited module(s) first, before the whole library — it is faster and it localizes the error; the command (unless type-checking interactively with the agda-mcp server): `nix develop --command agda src/Path/To/Module.lagda.md` 
 3. Before committing, run the full check exactly as CI does: `nix develop --command make check`.
 4. Do not stage generated artifacts (`*.agdai`, `Everything*.agda`, `/.agda/`); they are gitignored.
 

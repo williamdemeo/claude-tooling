@@ -52,6 +52,45 @@ Notes that cost time to rediscover.
 +  A first call against a cold library builds `.agdai` interfaces and can take
    minutes; raise `--timeout` before blaming the server.
 
+## Reproduce a bug a client in ANOTHER project hits
+
+The server's working directory is not its client's — `scripts/run-server.sh`
+`cd`s to this repository before exec — so any defect about path resolution
+(issue #101 was one) only reproduces when you drive it from somewhere else.
+Two ways, in increasing fidelity.
+
+**Binary directly, from the server's cwd.**  Equivalent to the above, but
+send the relative path a client in *its own* project would send:
+
+```sh
+'{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"check_file",
+  "arguments":{"filePath":"src/Whatever/Module.agda"}}}'
+```
+
+**Through `run-server.sh`, from the client's project.**  The real thing: `cd`
+into a scratch project (`git init`, a `*.agda-lib`, one module at a hierarchical
+path) and pipe the request into `"$REPO/scripts/run-server.sh" --agda-flags …`.
+The script's own fd juggling keeps stdout clean, so `| tail -1` is the response
+and its stderr is the server log — grep that for `uncaught exception` to tell a
+handled refusal from a crash.
+
+Gotcha worth the five minutes it costs: **`nix develop … --command bash -c '…'`
+prints the shellHook banner on the *outer* stdout**, so a pipeline that ends in
+`| tail -1 | python3 -c …` parses banner text and dies on "Expecting value".
+Have the inner script write its last line to a file and read the file after the
+shell exits:
+
+```sh
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+env -u LD_LIBRARY_PATH nix develop "$REPO#backend" --command bash -c \
+  "OUTFILE='$TMP/out.json' ERRLOG='$TMP/err.txt' '$SCRATCH/drive.sh' …" >/dev/null 2>&1 &&
+  python3 show.py < "$TMP/out.json"
+```
+
+`run-server.sh` does not have this problem — it saves real stdout on fd 3
+before the hook runs, which is exactly what the fd juggling in its header is for.
+
 ## Read the tool descriptions a client sees
 
 Descriptions are what an agent picks tools by, and they are built by
