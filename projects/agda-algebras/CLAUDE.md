@@ -6,7 +6,9 @@ Guidance for Claude Code working in this repository.  Keep changes consistent wi
 
 +  Enter the toolchain with `nix develop` (pins Agda 2.8.0 and standard-library 2.3 via `flake.lock`).  Never assume a system Agda.
 +  Type-check the whole library: `nix develop --command make check`.
-+  Type-check the module you are editing as you iterate, rather than only at the end; localizing an error to one module is much faster than reading it out of a whole-library run.
++  Type-checking one module (localizing an error to one module is much faster than reading it out of a whole-library run):
+   +  If using the agda-mcp server, use the tools it provides to type-check a module interactively, as you edit it, rather than only at the end;
+   +  If not using the agda-mcp: `nix develop --command agda src/Path/To/Module.lagda.md`.
 +  When a module is slow to check, profile before guessing: `agda --profile=internal <module>` (or `make profile` for the whole library).  The cost is rarely the typing — see the `agda-typecheck-performance` skill.
 +  There is no separate test or lint step — type-checking is the test, exactly as CI runs it.
 +  Do not commit generated artifacts: `*.agdai`, the generated `Everything*.agda` aggregator, and `/.agda/` are gitignored.
