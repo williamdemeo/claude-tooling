@@ -81,9 +81,11 @@ Have the inner script write its last line to a file and read the file after the
 shell exits:
 
 ```sh
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
 env -u LD_LIBRARY_PATH nix develop "$REPO#backend" --command bash -c \
-  "OUTFILE=/tmp/out.json ERRLOG=/tmp/err.txt '$SCRATCH/drive.sh' …" >/dev/null 2>&1
-python3 show.py < /tmp/out.json
+  "OUTFILE='$TMP/out.json' ERRLOG='$TMP/err.txt' '$SCRATCH/drive.sh' …" >/dev/null 2>&1 &&
+  python3 show.py < "$TMP/out.json"
 ```
 
 `run-server.sh` does not have this problem — it saves real stdout on fd 3
