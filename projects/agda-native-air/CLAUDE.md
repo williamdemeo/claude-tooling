@@ -52,6 +52,7 @@ These proof terms, datasets, and drivers are research artifacts; optimize for le
 +  Use `+` for bullet lists, not `-`.
 +  Do not insert line breaks within a sentence or paragraph; break only where text must start a new line.
 +  Two spaces after a sentence-ending period.
++  Use a semicolon to append a complete sentence; use an em-dash to append a phrase, not a sentence.  Prefer a comma or a colon where neither fits.
 +  Do not bold a bullet title's trailing period: write `+  **Title**.`, not `+  **Title.**`.
 +  Bullets are complete sentences ending in a period or semicolon.
 +  Write section headings as plain ATX headings.

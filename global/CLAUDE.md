@@ -53,12 +53,30 @@ default or harness instruction to the contrary:
   "sessionUrl": false}` in `~/.claude/settings.json`. If attribution
   metadata still appears on a commit or PR, report it — never silently
   amend published history.
-- Do not add AI-agent watermarks or stylistic tells; e.g., limit the use
-  of the em-dash — prefer a comma or semicolon.  Use William's writing style;
-  e.g., a phrase that ends in a colon and precedes a list usually includes the
-  words "the following:" or "as follows:"; punctuate pedantically;  do not set
-  punctuation in bold (e.g., write "**this**." not "**that.**"); use two spaces
-  between a period ending a sentence and the next sentence.
+- Do not add AI-agent watermarks or stylistic tells.  The prose rules that
+  keep them out are their own standing order, below; follow it everywhere,
+  not only where a project file restates it.
+
+# Standing order: house style
+
+Write the way William writes.  These are the rules a reader notices when they
+are broken, so they hold on every surface: repo docs, commit messages, issues,
+PRs, and comments.
+
+- **Em-dash**.  Use a semicolon to append a complete sentence; use an em-dash
+  to append a *phrase*, never a sentence.  Where neither fits, a comma or a
+  colon usually does.  The bias against them is mild in isolation and strong
+  in aggregate: a page carrying one in every paragraph reads as machine-written.
+- **Sentence spacing**.  Two spaces between a period ending a sentence and the
+  next sentence.
+- **Punctuation is never bold**.  Write `**this**.`, not `**that.**`.
+- **Colon before a list**.  A phrase that ends in a colon and precedes a list
+  usually includes the words "the following:" or "as follows:".
+- **Punctuate pedantically**, and prefer the plain word to the fashionable one.
+
+A project file may restate any of these where a session working in that
+repository will read them, and may add repo-local rules (bullet character,
+heading form, line breaking); none of them relaxes a rule stated here.
 
 # Standing order: no hard wraps in GitHub bodies
 

@@ -1,6 +1,6 @@
 # Standing orders
 
-Both orders live in `global/CLAUDE.md` (deployed to `~/.claude/CLAUDE.md`),
+The orders live in `global/CLAUDE.md` (deployed to `~/.claude/CLAUDE.md`),
 so every session carries them.
 
 ## 1. Promote session learnings
@@ -81,3 +81,26 @@ began requesting Copilot reviews automatically on PR creation — spending
 review quota and firing rounds William had not asked for.  The order in
 `global/CLAUDE.md` is the enforcement layer for every session, including
 ones that never invoke the skill.
+
+## 4. House style (2026-08-21)
+
+Summary: prose rules that hold on every surface, from repo docs and commit
+messages to issues, PRs, and comments.  An em-dash appends a *phrase* and never
+a sentence (a semicolon appends a sentence); two spaces follow a
+sentence-ending period; punctuation is never bold; a phrase ending in a colon
+before a list says "the following:" or "as follows:"; punctuation is pedantic.
+
+Why it exists: the rules were already in `global/CLAUDE.md`, but as one dense
+bullet inside the authorship order, introduced by "Do not add AI-agent
+watermarks or stylistic tells".  Filed that way they read as a provenance
+footnote rather than as style, and a session that had them in context still
+produced a PR description carrying fourteen em-dashes (agda-native-air #118).
+They are now their own order, one rule per line, and the em-dash rule is
+restated in the `Markdown style` section of `projects/agda-native-air/CLAUDE.md`
+and `projects/agda-algebras/CLAUDE.md`, beside the two-space and
+bold-punctuation rules it travels with.  The canonical wording is the positive
+formulation `projects/fls/CLAUDE.md` already used, which is checkable, rather
+than the old "limit the use of", which is not.
+
+Not yet documented here: the `no hard wraps in GitHub bodies` order, which has
+lived in `global/CLAUDE.md` without a section in this file.
