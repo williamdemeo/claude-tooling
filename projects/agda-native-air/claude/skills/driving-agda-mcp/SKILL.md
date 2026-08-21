@@ -161,6 +161,26 @@ drive the same pipeline as above:
    refresh it after fls's `flake.lock` moves with
    `nix build ~/git/IO/fls/master#fls-agdaWithPackages -o ~/.cache/fls/agda-root`.
 
+## Gotcha: a flag-less server cannot check anything under the flake
+
+Driving the binary with no `--agda-flags` does not give you a bare Agda: the
+checking `agda` is the flake's wrapper, whose defaults ask for `agda-dojang`
+while its own nix-store registry knows only `standard-library`, so EVERY
+check answers a `LibraryError` — even for a file importing only builtins
+(verified while building the #119 harness).  Always pass the committed flag
+set (`-i agda-dojang/agda --library-file=agda/libraries -l agda-dojang -l
+standard-library`); it is correct for builtin-only files too.
+
+## A reference client lives in the repo
+
+`struxdriver.search.McpClient` (+ `Wire`, `Oracle`) is a working Scala client
+for this transport — spawn, initialize, newline framing, double-decode,
+`isError` branching, per-call timing — with its decoders pinned against
+responses captured verbatim from the live server
+(`strux-driver/src/test/resources/search/wire-*.json`).  The fastest live
+round-trip through it: `make proof-search-it` (BACKEND_USE_NIX=0 inside the
+shell), which runs the two-obligation regression end to end.
+
 ## Gotcha: `nix` from inside a session shell
 
 A local session inherits an `LD_LIBRARY_PATH` that breaks the `nix` binary.
