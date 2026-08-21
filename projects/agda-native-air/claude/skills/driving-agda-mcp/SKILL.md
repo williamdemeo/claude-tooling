@@ -1,6 +1,6 @@
 ---
 name: driving-agda-mcp
-description: Drive the agda-mcp server over its real JSON-RPC stdio transport and read back exactly what an MCP client would see — tool descriptions from tools/list, and the full response body of check_file / get_diagnostics / get_goal / fill_hole. Use whenever working on agda-mcp (issues under the #68 hardening wave) and you need to verify a response shape, a tool description, or an error payload rather than infer it from Haskell; also covers finding out what a nix devShell writes into the caller's directory.
+description: Drive the agda-mcp server over its real JSON-RPC stdio transport and read back exactly what an MCP client would see — tool descriptions from tools/list, and the full response body of check_file / get_diagnostics / get_goal / fill_hole. Use whenever working on agda-mcp and you need to verify a response shape, a tool description, or an error payload rather than infer it from Haskell; also covers finding out what a nix devShell writes into the caller's directory.
 ---
 
 # Driving agda-mcp end to end
@@ -54,10 +54,9 @@ Notes that cost time to rediscover.
 
 ## Reproduce a bug a client in ANOTHER project hits
 
-The server's working directory is not its client's — `scripts/run-server.sh`
-`cd`s to this repository before exec — so any defect about path resolution
-(issue #101 was one) only reproduces when you drive it from somewhere else.
-Two ways, in increasing fidelity.
+The server's working directory is not its client's — `scripts/run-server.sh` `cd`s
+to this repository before exec — so any  defect about path resolution only
+reproduces when you drive it from somewhere else. Two ways, in increasing fidelity.
 
 **Binary directly, from the server's cwd.**  Equivalent to the above, but
 send the relative path a client in *its own* project would send:
@@ -138,6 +137,29 @@ ls -a /tmp/canary          # anything beyond .git was written by the hook
 `docs/agda-mcp-environment.md` records the inventory this technique produced and
 the anchoring fix (`AGDA_NATIVE_AIR_ROOT`); re-run the canary after any
 shellHook change.
+
+## Driving against a client project (the fls pattern)
+
+The binary needs no wrapper for this — give it the client anchors directly and
+drive the same pipeline as above:
+
+```sh
+"$BIN" --cwd /home/williamdemeo/git/IO/fls/master \
+       --agda-bin /home/williamdemeo/.cache/fls/agda-root/bin/agda \
+       --agda-flags "-i $PWD/agda-dojang/agda" --timeout 900
+```
+
++  `--cwd` is what makes the client's modules resolve: Agda finds a project's
+   `.agda-lib` by walking up from the **process cwd**, not from the checked
+   file, and it is also what routes `.agdai` interfaces into the client's own
+   `_build/`.
++  To exercise `get_goal` without writing into the client tree, put a probe
+   module with one hole in any scratch directory, importing the client's
+   modules (e.g. `open import Ledger.Prelude`); with `--cwd` set they resolve,
+   and the probe's `.agdai` lands beside the probe.
++  `~/.cache/fls/agda-root` is a gc-rooted symlink to fls's wrapped agda;
+   refresh it after fls's `flake.lock` moves with
+   `nix build ~/git/IO/fls/master#fls-agdaWithPackages -o ~/.cache/fls/agda-root`.
 
 ## Gotcha: `nix` from inside a session shell
 

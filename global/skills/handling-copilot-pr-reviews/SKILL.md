@@ -68,6 +68,19 @@ suppressed block, say so rather than suggesting another round.
 A finding is a hypothesis about the code, not a verdict.  Run something.
 
 +  Reproduce the claimed behaviour through the real entry point, not by reading.
++  Then run a **control** that isolates the claimed cause, or the reproduction
+   proves less than it looks.  A finding said a decoy import *inside a hole*
+   broke a call; the same file with innocuous multiline hole text still worked,
+   which is what established the decoy — rather than the multiline hole — as the
+   cause.  Where the claim is about a tool's *output* being rejected downstream,
+   feed that output to the downstream tool directly (writing the patched file and
+   running the compiler on it turned "this can break" into `[ParseError]` at a
+   named line).
++  Ask whether the defect is a **regression or pre-existing**, because it changes
+   what the fix commit should claim.  Cheapest way, no rebuild: reimplement the
+   old expression in a repl (`cabal repl lib:foo`, `node -e`, …) and run it over
+   the reproduction.  Three findings in one review cycle all turned out to
+   predate the branch that way.
 +  When a fix is *suggested*, check the suggestion is right for the system —
    upstream tools have opinions.  A remedy that sounds safer can introduce a
    different wrong answer.
@@ -88,19 +101,29 @@ Reply to **every** comment, whether you accepted or rejected it.
 ```sh
 # Reply on an inline comment's thread (needs the comment id).
 gh api -X POST "repos/$OWNER_REPO/pulls/$PR/comments/$COMMENT_ID/replies" \
-  -f body="$(cat reply.md)" --jq '.html_url'
+  -F body=@reply.md --jq '.html_url'
 
 # Suppressed findings have no thread — reply at PR level, quoting the finding.
 gh api -X POST "repos/$OWNER_REPO/issues/$PR/comments" \
-  -f body="$(cat reply.md)" --jq '.html_url'
+  -F body=@reply.md --jq '.html_url'
 ```
 
-Write the reply from a file, not an inline `-f body="…"` string: multi-line
-markdown with backticks and quotes does not survive shell quoting reliably.
+Write the reply from a file and pass it as `-F body=@reply.md`, never as an
+inline `-f body="…"` string and not even as `-f body="$(cat reply.md)"`: the
+`@` form keeps multi-line markdown out of argv entirely, so nothing depends on
+shell quoting or on the body fitting in `ARG_MAX`.
 
 A reply that disagrees should quote the claim, state what was run, and paste the
 output.  A reply that agrees should say what changed, and whether the defect was
 wider than reported.
+
+Two things worth stating explicitly when they are true, because they are what a
+reviewer cannot verify alone: that the finding **predates the branch** (with how
+you established it), and that you **deviated from the suggested remedy** and why.
+A remedy aimed at the reported instance often leaves a sibling case broken — one
+suggested blanking non-code *inside* a token while keeping the token; blanking the
+whole token was both simpler and strictly wider, and the reply said so with the
+case the narrower fix would have missed.
 
 ## Editing the PR body on a repo with classic Projects
 
@@ -110,12 +133,14 @@ wider than reported.
 GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)
 ```
 
-The mutation does not apply — verify rather than assume.  Use the REST endpoint:
+The mutation does not apply — verify rather than assume.  Use the REST endpoint,
+with `-F key=@file` so the markdown never passes through argv:
 
 ```sh
-python3 -c "import json,pathlib; print(json.dumps({'body': pathlib.Path('body.md').read_text()}))" > body.json
-gh api -X PATCH "repos/$OWNER_REPO/pulls/$PR" --input body.json --jq .number
+gh api -X PATCH "repos/$OWNER_REPO/pulls/$PR" -F body=@body.md --jq .number
 ```
+
+No temp JSON is needed; `@` makes `gh` read the value from the file.
 
 The same deprecation breaks `gh issue view` / `gh pr view` without `--json`; pass
 explicit fields (`gh issue view N --json number,title,body`) or use `gh api`.
@@ -133,6 +158,13 @@ for i in $(seq 1 60); do
   sleep 45
 done
 ```
+
+A requested review also shows up as a workflow run named `Running Copilot Code
+Review`, which is usually the *newest* run for that commit — so a CI poll written
+as `gh run list --limit 1` reports the review workflow's status, not the build's.
+Filter by workflow name (`select(.name=="CI Pipeline")`) when waiting on CI after
+pushing a review fix.  Its absence on a later push is also how you tell a
+requested review from an automatic one.
 
 ## Before claiming a fix works end to end
 
