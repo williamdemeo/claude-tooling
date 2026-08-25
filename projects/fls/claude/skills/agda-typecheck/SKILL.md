@@ -22,6 +22,27 @@ Agda code in Nix-based projects (e.g., formal-ledger-specifications, agda-algebr
 + `x != y of type T`: a definitional-equality mismatch; check whether the development expects setoid equality rather than propositional `_≡_`.
 + `No instance of ...`: a missing import, or an instance argument not in scope.
 
+## Extending a wide record: the typechecker is not a complete gate
+
+Adding a field to a record with mechanical companions (`PParams` and its
+`PParamsUpdate`, `modifies*Group`, `applyPParamsUpdate`; `StakePoolParams` and
+its `Foreign` conversions) has a failure mode the typechecker cannot see: a
+`Bool`-valued group predicate or a positivity list that simply *omits* the new
+field still typechecks.  Three habits, in order:
+
+1. Warm the closure BEFORE the first edit — run the full-closure typecheck in
+   the background while you compose the patch, so later runs re-check only the
+   modules your edit touches instead of the whole library.
+2. Split the change into patches that each typecheck on their own, and commit
+   each one; a failure then localizes to one patch, and every commit is green.
+   Adding fields + `applyPParamsUpdate` is one patch; changing the *type* of a
+   predicate (e.g. `paramsWellFormed` gaining a conjunct) is another, since that
+   ripples to every pattern match on it.
+3. Assert placement mechanically.  A throwaway script that checks each new field
+   name appears in each region it must (record, update record, each group
+   predicate, the apply function, each well-formedness list, the prose field
+   list) catches exactly what the typechecker will not.
+
 ## Quality gate (verify before declaring done)
 
 + Every new public definition has an explicit type signature.
