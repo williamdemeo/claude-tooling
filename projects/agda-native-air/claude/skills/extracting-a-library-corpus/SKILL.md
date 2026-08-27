@@ -32,6 +32,24 @@ Step 1 runs `agda-algebras-metadata` as a prerequisite, so the module list and t
 +  **Commit before the final assembly.**  `provenance.json` records `workingTreeDirty` for both the library and this repo.  A corpus whose provenance says the producer was dirty is not reproducible, so: commit, then re-run `make corpus-nix` (about 30 s) and use those digests.
 +  **Determinism is checkable.**  Two assembly runs over the same extraction must produce identical `sha256` for both `corpus.jsonl` and `corpus.jsonl.gz`.  Verify it rather than asserting it; it is one command and it is what makes the digests in the card mean anything.
 
+## The Nix-store variant (stdlib, or any flake-pinned library)
+
+Verified end to end for agda-stdlib 2.3 (#123): extracting the library the FLAKE resolves, straight out of `/nix/store`, is both legal and the fastest path — the store derivation ships prebuilt `.agdai` interfaces for every module, so the full 1,153-module stdlib run is ~5 minutes, and the store path itself is a stronger provenance pin than a commit hash (the corpus provably matches the toolchain's own bytes).  One target does the whole lane:
+
+```sh
+make corpus-stdlib-nix        # discover store path, module list, extract, DOT, package
+```
+
+Three things the read-only store changes, each already handled by that lane:
+
++  **The metadata scanner cannot run** — it writes a temporary Everything module INSIDE the library root.  The lane generates the module list with `find` over `src/` and passes `EXTRACT_LIB_METADATA_DEP=` to skip the agda-algebras scan; the dependency DOT comes from `scripts/corpus-stdlib-depgraph.sh`, which checks a scratch Everything (union of infective flags: `--guardedness --sized-types --rewriting`) with `--dependency-graph`.
++  **`provenance.json`'s `source.commit` reads `unknown`** — a store path has no git identity.  The card supplies the upstream mapping instead (nixpkgs `standard-library` 2.3 builds tag `v2.3` = `8326c747…`); do not "fix" this by cloning, which would trade the exact-bytes pin for a weaker one and a cold build.
++  **The producer git state is recorded at EXTRACTION time** (read back from the run manifest), so committing and re-running only the 30 s assembly does NOT clean a dirty-producer record — re-run the extraction (cheap here) from the committed tree.
+
+`corpus-mcp-smoke` probes agda-algebras names by default; other libraries override them: `make corpus-mcp-smoke LIB_NAME=agda-stdlib CORPUS_SMOKE_NAME_PATTERN=+-comm`.
+
+One consumer gotcha this corpus made loud: **stdlib states its lemmas through `Algebra.Definitions` aliases**, fully qualified with embedded newlines (`+-comm`'s type is `Algebra.Definitions.Commutative Agda.Builtin.Equality._≡_ Agda.Builtin.Nat._+_`), so string search over types misses expanded pi forms and arity cannot be read off the string — a consumer needing the expanded type must ask the interaction lane's `type_of`, which expands aliases.
+
 ## Reading the outcome
 
 `data/<lib>/raw/run-manifest.json` carries a `summary` and one `results` record per module.  Start there, not in the log:
