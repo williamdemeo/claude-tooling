@@ -9,10 +9,18 @@ A gold solution or Agda module is not done until it type-checks under the pinned
 
 ## Procedure
 
-1. All Agda runs inside the flake shell, which registers `standard-library` and the repo-local `agda-dojang` library and defines an `agda` wrapper: `nix develop .#backend --command agda <file>`.  Never call a bare system `agda`.
-2. Check a single file first — it is fast and localizes errors.  For a benchmark gold file: `nix develop .#backend --command agda data/benchmarks/agda-stdlib-v0/gold/<Name>.agda`.
-3. To check every committed gold solution, iterate the `gold` paths listed in `data/benchmarks/benchmark-index.jsonl`.
-4. Do not stage generated artifacts: `*.agdai` and the nix-generated `agda/libraries` are gitignored.
+1. All Agda runs inside the flake shell, which registers `standard-library`, the repo-local `agda-dojang`, and (since #127) the flake-pinned `agda-algebras` store copy.  Never call a bare system `agda`.
+2. The hook's `agda` wrapper is a shell FUNCTION and does not survive `--command`: `nix develop .#backend --command agda <file>` runs the bare binary and dies with `[LibraryError] Library 'agda-dojang' not found`.  From a non-interactive session, pass the flags explicitly — the same set the Scala components use (verified 2026-09-01 on the #127 tier):
+
+   ```sh
+   env -u LD_LIBRARY_PATH nix develop .#backend --command agda      --library-file=agda/libraries -l agda-dojang -l standard-library -l agda-algebras      -i <dir-of-the-file> <file>
+   ```
+
+   Both `--library-file` and `-i` are load-bearing; interactive shells can still use the bare `agda <file>` wrapper.
+3. Check a single file first — it is fast and localizes errors; batch several files in one shell entry with `--command bash -c 'for f in …; do agda <flags> "$f"; done'` (the explicit flags work in child shells too).
+4. To check every committed gold solution, run `make eval-benchmark` (the runner adds `--library agda-algebras` for that tier's rows itself); the CI slice is `make eval-benchmark-smoke`.
+5. Do not stage generated artifacts: `*.agdai` and the nix-generated `agda/libraries` are gitignored.
+6. `agda-algebras` fixtures need no checkout: the flake registers the store pin when `AGDA_ALGEBRAS_ROOT` is unset, and a live checkout overrides it.
 
 ## Checking a scratch module (observing what Agda actually prints)
 
@@ -33,7 +41,7 @@ Agda 2.8.0 writes diagnostics to **stdout**, not stderr, so capture with `2>&1` 
 
 +  Each benchmark module imports `AgdaDojang.Debug`; that resolves only inside the flake shell, where the `agda-dojang` library is registered — which is why a bare `agda` fails.
 +  Obligation files under `obligations/` intentionally contain a `{!!}` hole and are not expected to type-check clean; only the matching `gold/` file must.
-+  `agda-algebras` obligations need a local checkout: set `AGDA_ALGEBRAS_ROOT=/path/to/agda-algebras` before entering the shell so the flake registers the library.
++  `agda-algebras` obligations check against the flake-pinned store library by default; export `AGDA_ALGEBRAS_ROOT=/path/to/agda-algebras` before entering the shell only to test against a live checkout.
 
 ## Reading common Agda errors
 
