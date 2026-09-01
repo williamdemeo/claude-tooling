@@ -32,7 +32,12 @@ field still typechecks.  Three habits, in order:
 
 1. Warm the closure BEFORE the first edit — run the full-closure typecheck in
    the background while you compose the patch, so later runs re-check only the
-   modules your edit touches instead of the whole library.
+   modules your edit touches instead of the whole library.  For a FRESH
+   worktree (e.g. checking out someone else's PR branch), seed its cache first
+   by copying `_build/` from a sibling worktree of the same repo: interface
+   files are content-keyed, so matching modules are reused and stale ones are
+   simply rebuilt (verified 2026-08-31: a cold 98-module Dijkstra gate finished
+   in minutes off a seeded cache).
 2. Split the change into patches that each typecheck on their own, and commit
    each one; a failure then localizes to one patch, and every commit is green.
    Adding fields + `applyPParamsUpdate` is one patch; changing the *type* of a
