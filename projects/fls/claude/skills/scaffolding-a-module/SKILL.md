@@ -20,6 +20,10 @@ open the nearest one and mirror it before consulting anything generic.
    ---
    ```
 
+   `source_branch` names the branch the rendered source link points at:
+   `master` for era modules, but `leios-main` for new Leios-subtree
+   modules (the committee module set the precedent), until Leios merges.
+
 2. **One ATX H1** with an explicit anchor: `# Title {#sec:kebab-title}`.
    Subheadings are run-in italics on their own line (`*The vote*`), not ATX.
 
