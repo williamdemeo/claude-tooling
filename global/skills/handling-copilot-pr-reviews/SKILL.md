@@ -59,7 +59,15 @@ gh api -X POST "repos/$OWNER_REPO/pulls/$PR/requested_reviewers" \
 ```
 
 It returns the PR object with `requested_reviewers: []` — that is normal for the
-bot, not a failure.  A review typically lands within ~15 minutes.  Rounds tend to
+bot, not a failure.
+
+**Review effort level cannot be set programmatically.**  Copilot code review has
+two effort levels (GA 2026-08): Lite, the default, and Balanced (deeper analysis,
+higher-reasoning model).  The level is chosen per request only in the web UI's
+Reviewers section, or as an org/repo default for *automatic* reviews; the REST
+request above, GraphQL, and `gh` expose no parameter for it.  If asked to request
+a review at a specific depth, say the API cannot express it and leave the request
+to William.  A review typically lands within ~15 minutes.  Rounds tend to
 find progressively less; when one comes back with no comments *and* no
 suppressed block, say so rather than suggesting another round.
 

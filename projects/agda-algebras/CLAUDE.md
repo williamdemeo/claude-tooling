@@ -52,16 +52,17 @@ the following:
 +  Do not perform enthusiasm.  If agda-mcp slowed the work down, the report should
    say exactly that; the point is real evidence in both directions.
 
-### Corpus-quality conventions
+### Proof granularity and corpus-quality conventions
 
 Proof terms are first-class training data.  Optimize for legibility and stability, not cleverness.
 
-+  Prefer many small, focused theorems over a few large ones.
-+  Prefer named helper lemmas over inlined or opaque `rewrite` chains.  This is not only style: a `with` (or `rewrite`) inside a proof abstracts the *whole* goal, and when the goal unfolds into the generic interpretation machinery the coverage check of the generated auxiliary is expensive — measured at 15 s in one module, 0.9 s once the split moved into a lemma taking the `Dec` value as an argument.
-+  A construction whose operations are determined by an order (a lattice, say) is cheaper to build and to check order-first: establish the partial order with its infimum and supremum and let the standard library derive the equations, rather than proving the equations and their congruences by hand.
+Prefer **many small, well-named lemmas** over monolithic proofs: each definition, lemma, or theorem gets an Agda comment above it, and literate Agda files carry English prose between blocks. (This complements the existing doc-comment-header policy.) This granularity is a project goal; do not consolidate small lemmas for brevity.
+
++  Prefer named helper lemmas over inlined or opaque `rewrite` chains.
+   This is not only style: a `with` (or `rewrite`) inside a proof abstracts the *whole* goal, and when the goal unfolds into the generic interpretation machinery the coverage check of the generated auxiliary is expensive (measured at 15 s in one module, 0.9 s once the split moved into a lemma taking the `Dec` value as an argument).
 +  One canonical form per concept; introduce deprecations, never synonyms.
-+  Put an explicit type signature on every public definition.
-+  Pair each formal statement with a natural-language comment explaining what it says and why.
++  Include the explicit type signature with every public definition.
++  A construction whose operations are determined by an order (a lattice, say) is cheaper to build and to check order-first: establish the partial order with its infimum and supremum and let the standard library derive the equations, rather than proving the equations and their congruences by hand.
 +  Use `{-# OPTIONS --cubical-compatible --exact-split --safe #-}` (this supersedes `--without-K`).
 +  Honour stable-API discipline: deprecation cycles of at least one minor version, announced with `WARNING_ON_USAGE` pragmas.
 +  In-flight deprecation: `∣_∣` / `∥_∥` are being replaced library-wide by `proj₁` / `proj₂` (announced in v3.0, executed in v3.1).  Write new code with `proj₁` / `proj₂`.
