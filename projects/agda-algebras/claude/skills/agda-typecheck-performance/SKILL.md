@@ -213,10 +213,19 @@ application exhausted a 32 GB heap.
    argument.  Write the relation out directly and consume the module's lemmas *once,
    generically*, inside an opaque block.
 
-+  **Pattern-matching a `Σ` argument blocks reduction where laziness was wanted.**
-   `f (K , K?) = …` forces its argument open; `f K = … proj₁ K … proj₂ K …` lets
-   `f K` reduce while `K` stays stuck.  That is the difference between a goal that
-   normalizes a concrete structure and one that does not.
++  **Do *not* suspect a `Σ` pattern match.**  It is tempting to think
+   `f (K , K?) = …` forces its argument open while `f K = … proj₁ K …` stays lazy.
+   It does not: `Σ` is a record with eta, so Agda eta-expands a neutral argument
+   and the clause matches regardless.  Two lines settle it, and it is worth
+   keeping to hand because the hypothesis is so plausible:
+
+   ```agda
+   f (a , _) = a        g p = p .proj₁
+   same : (t : A × B) → f t ≡ g t
+   same t = refl        -- accepted, so the forms are definitionally equal
+   ```
+
+   Measured on #530, converting the pattern matches to projections moved nothing.
 
 The general lesson: for a large concrete instance, keep every *proof* opaque and every
 *computation* transparent, and never let a goal mention a concrete bundle whose
