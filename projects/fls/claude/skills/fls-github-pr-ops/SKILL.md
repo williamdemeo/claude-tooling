@@ -97,6 +97,6 @@ than sweeping them into your own commits.
 
 ## Property-tracking gate
 On tracking branches, before every push:
-`python3 build-tools/scripts/scan_properties.py --check`
+`python3 build-tools/scripts/property-tracking/scan_properties.py --check`
 (catalog: `build-tools/properties.yaml`; the generated dashboard and issues
 view live in `build-tools/static/mkdocs/docs/`).

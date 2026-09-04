@@ -61,11 +61,12 @@ The script lineages, and how they relate (measured 2026-08-13):
   section, milestones with exit criteria, mermaid dependency graphs,
   `BEGIN/END GENERATED` markers) and the website's (driven by the newest
   scripts; see its Makefile's `RENDER` target for real invocation flags).
-- `~/git/IO/fls/master/build-tools/scripts/` and
-  `~/git/IO/fls/master/docs/adr/0001-ledger-property-tracking.md` — a
-  sibling system. Do NOT copy its catalog/derived-status design (that works
-  only when "done" is machine-checkable); DO steal its hardening and its
-  ADR style (the one-source-of-truth-per-concern table).
+- `~/git/IO/fls/master/build-tools/scripts/property-tracking/` and the
+  "Tracking Properties of the Ledger" section of fls CONTRIBUTING.md — a
+  sibling system (its design record is PR #1226's description). Do NOT copy
+  its catalog/derived-status design (that works only when "done" is
+  machine-checkable); DO steal its hardening and its
+  one-source-of-truth-per-concern table.
 - **ualib/agda-algebras#293** ("Follow-up to #289 — known issues in the
   gh_project tooling") — read it in full; its six items are requirements
   here (next section).
