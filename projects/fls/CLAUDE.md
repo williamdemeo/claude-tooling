@@ -65,7 +65,7 @@ the following:
 
 ## Property tracking
 
-+  Catalog: `build-tools/properties.yaml`.  Status is DERIVED from the Agda;
++  Catalog: `build-tools/scripts/property-tracking/properties.yaml`.  Status is DERIVED from the Agda;
    never declare it.  The dashboard and issues view are generated into
    `build-tools/static/mkdocs/docs/`; edit the catalog, regenerate, commit
    together.  Run `python3 build-tools/scripts/property-tracking/scan_properties.py --check`
