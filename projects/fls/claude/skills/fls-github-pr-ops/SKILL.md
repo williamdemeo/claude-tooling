@@ -17,6 +17,16 @@ When the user wrote or revised the body themselves: fetch it fresh
 replacements (a python one-liner that ASSERTS each occurrence count), and
 PATCH back. Never regenerate the body wholesale over their revision.
 
+GUARDS (learned the hard way — an unguarded PATCH once wiped a PR body):
+run the fetch from INSIDE the repo (gh resolves the repo from git context and
+fails outside it, leaving the redirect file EMPTY); chain fetch → edit → PATCH
+with `set -e`/`&&` so a failed fetch aborts the PATCH; and assert the body file
+is non-trivially sized before PATCHing. If a body does get clobbered, recover
+it verbatim from GraphQL: `userContentEdits(first: N) { nodes { createdAt
+editor { login } diff } }` on the pullRequest — each node's `diff` field holds
+the FULL body as of that edit (the newest node is the clobber; take the one
+before it).
+
 ## Review comments
 All threads with resolved-state (REST does not expose `isResolved`):
 
