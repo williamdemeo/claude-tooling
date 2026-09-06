@@ -8,7 +8,7 @@
   "permissions": {
     "defaultMode": "auto"
   },
-  "model": "claude-fable-5[1m]",
+  "model": "claude-fable-5-1[1m]",
   "effortLevel": "xhigh",
   "tui": "fullscreen",
   "theme": "dark",

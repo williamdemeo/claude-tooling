@@ -46,7 +46,8 @@ Whether a project keeps such config committed is a per-project decision recorded
     projects/<p>/claude/     project .claude members: skills/<name>/, hooks/, …
     projects/<p>/mcp.json    optional: MCP server registrations, deployed as
                              .mcp.json at the parent and every checkout root
-    docs/                    architecture, workflows, migration runbook, recovery
+    docs/                    architecture, workflows, migration runbook, recovery,
+                             kick-off prompts (kickoffs/<slug>.md, one per session brief)
 
 **Requirements**: git, a POSIX shell, and python3 ≥ 3.11 (stdlib only, no flake and
 no `pip install`, because this repo has to work on a bare machine; see

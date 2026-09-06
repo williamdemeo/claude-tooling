@@ -2,24 +2,28 @@
 
 Guidance for Claude Code working in this repository.  Keep changes consistent with these conventions; they exist to keep the library coherent and to preserve its value as a vetted Agda corpus for ML training and retrieval.
 
+## Mathematics must be correct
+
+The agda-algebras library is formal mathematics.  Above all else, the mathematics must be flawless.  Correctness is the primary goal; everything else is secondary.  If you notice a potential flaw (unsound logic, incorrect proof, hidden assumption, or *anything suspicious*) flag it loudly, immediately.
+
 ## Build and type-check
 
 +  Enter the toolchain with `nix develop` (pins Agda 2.8.0 and standard-library 2.3 via `flake.lock`).  Never assume a system Agda.
-+  Type-check the whole library: `nix develop --command make check`.
++  Type-check the whole library with the command `nix develop --command make check`.
 +  Type-checking one module (localizing an error to one module is much faster than reading it out of a whole-library run):
    +  If using the agda-mcp server, use the tools it provides to type-check a module interactively, as you edit it, rather than only at the end;
    +  If not using the agda-mcp: `nix develop --command agda src/Path/To/Module.lagda.md`.
-+  When a module is slow to check, profile before guessing: `agda --profile=internal <module>` (or `make profile` for the whole library).  The cost is rarely the typing — see the `agda-typecheck-performance` skill.
-+  There is no separate test or lint step — type-checking is the test, exactly as CI runs it.
-+  Do not commit generated artifacts: `*.agdai`, the generated `Everything*.agda` aggregator, and `/.agda/` are gitignored.
++  When a module is slow to check, profile before guessing: `agda --profile=internal <module>` (or `make profile` for the whole library).  The cost is rarely the typing; see the `agda-typecheck-performance` skill.
++  There is no separate test or lint step; type-checking is the test, exactly as CI runs it.
++  Do not commit generated artifacts like `*.agdai` files, the generated `Everything*.agda` aggregator, or `/.agda/`; these are all gitignored.
 
 ## Repository architecture
 
 +  `src/Setoid/` is the canonical development tree.  New work goes here.
-+  `src/Legacy/Base/` is frozen legacy.  Do not develop new results there; treat it as read-only.  `(`Setoid/` is self-sufficient — no `Legacy.Base.*` imports.  The only remaining consumer-level Legacy imports are in `Examples.Structures` and `Exercises.Complexity.FiniteCSP`, tracked by M2-8b / M2-8c.)`
-+  `src/Cubical/` is the long-term canonical target (v4.0).  When defining new structures, isolate the underlying equality/equivalence so it can be mechanically substituted on the eventual Cubical port.
++  `src/Legacy/Base/` is frozen legacy.  Do not develop new results there; treat it as read-only.  (`Setoid/` is self-sufficient and has no `Legacy.Base.*` imports.  The only remaining consumer-level Legacy imports are in `Examples.Structures` and `Exercises.Complexity.FiniteCSP`, tracked by issues [M2-8b] and [M2-8c].)
++  `src/Cubical/` is a long-term canonical target (v4.0).  When defining new structures, isolate the underlying equality/equivalence so it can be mechanically substituted on the eventual Cubical port.
 +  The `Classical/` tree builds specific theories (semigroups, groups, lattices, rings) over the universal-algebra foundation, using Σ-type definitions at the core with record-typed "bundle views" for agda-stdlib interop.
-+  The literate format is `.lagda.md` (ADR-004); every module is literate Markdown.  Render inline Agda names with kramdown attribute spans, e.g. `` `S`{.AgdaFunction} ``.
++  The literate format is `.lagda.md` (ADR-004); every module is literate Markdown.  Render inline Agda names with kramdown attribute spans, e.g. `` `S`{.AgdaFunction} `` and `` `S`{.AgdaFunction}` x` ``, but NOT `` `S x`{.AgdaFunction} ``.
 +  Roadmap and milestones (M1–M9) live in `docs/GITHUB_PROJECT.md`; the full style guide is `docs/STYLE_GUIDE.md`.
 
 ## Library policy
@@ -30,65 +34,46 @@ This project *deliberately avoids* the libraries the IOG formal-ledger-specifica
 
 ### try agda-mcp first
 
-The agda-mcp server (from the agda-native-air project) exists so the agent can
-develop Agda the way humans do: hole-driven, with instant feedback from the
-type-checker, instead of composing a whole module and iterating on batch errors.
-Until further notice, every session that writes or modifies Agda in this project does
-the following:
+The agda-mcp server (from the agda-native-air project) exists so the agent can develop Agda code in small, verified chunks, with the help of the type-checker, instead of composing a whole large module before type-checking and then iteratively repairing errors.
 
-+  BEFORE writing the first line of Agda, look for the agda-mcp tools: run ToolSearch
-   with query "+agda" and load what it returns.  If the server is not connected, note
-   that once in the final message and use the CLI workflow.
-+  Prefer hole-driven development while drafting: leave `?` holes, load the file,
-   query each goal's type and context, propose candidate terms (give/refine), and let
-   the checker's response drive the next step.  Batch-typechecking the whole module
-   remains the FINAL gate before declaring work done, not the development loop.
-+  Field reports are a deliverable.  End the session's final message with a short
-   agda-mcp report: which tools were used, what  worked, what was awkward or missing,
-   and, equally valuable, whether the CLI loop was genuinely more efficient (say why).
-   Append the same report to
-   ~/git/formalverification/agda-native-air/main/docs/mcp-field-reports.md
-   (create it if missing).
-+  Do not perform enthusiasm.  If agda-mcp slowed the work down, the report should
-   say exactly that; the point is real evidence in both directions.
+Every session that writes or modifies Agda in this project proceeds as follows:
+
++  BEFORE writing the first line of Agda, look for the agda-mcp tools: run ToolSearch with query "+agda" and load what it returns.  If the server is not connected, note that once in the final message and use the CLI workflow.
++  Plan a module and its types and proofs before composing it.  If it is large and complex, consider hole-driven development while drafting: create the module skeleton, leaving `?` holes, load the file, query/confirm each goal's type and context, propose candidate terms (give/refine), and let the checker's response drive the next step.  Batch-typechecking the whole module remains the FINAL gate before declaring work done, but generally speaking it should not the initial development loop.
++  **Field reports are a deliverable**.  End the session's final message with a short agda-mcp report: which tools were used, what worked, what was awkward or missing, and, equally valuable, whether the CLI loop was genuinely more efficient (say why, if that info is readily available).  Append the same report to the file `~/git/formalverification/agda-native-air/main/docs/mcp-field-reports.md`.
++  **Do not perform enthusiasm**.  If agda-mcp slowed the work down, the report should say exactly that; the point is real evidence in both directions.  The agda-mcp is a research tool that we want to improve so that it makes agents more capable and efficient at developing high-quality Agda code.  Your field reports are a vital part of that project.
 
 ### Proof granularity and corpus-quality conventions
 
 Proof terms are first-class training data.  Optimize for legibility and stability, not cleverness.
 
-Prefer **many small, well-named lemmas** over monolithic proofs: each definition, lemma, or theorem gets an Agda comment above it, and literate Agda files carry English prose between blocks. (This complements the existing doc-comment-header policy.) This granularity is a project goal; do not consolidate small lemmas for brevity.
+Prefer **many small, well-named lemmas** over monolithic proofs: each definition, lemma, or theorem gets an Agda comment above it, and literate Agda files carry English prose between blocks. (This complements the existing doc-comment-header policy.)  Do not consolidate small lemmas for brevity.  This granularity is a project goal.
 
 +  Prefer named helper lemmas over inlined or opaque `rewrite` chains.
    This is not only style: a `with` (or `rewrite`) inside a proof abstracts the *whole* goal, and when the goal unfolds into the generic interpretation machinery the coverage check of the generated auxiliary is expensive (measured at 15 s in one module, 0.9 s once the split moved into a lemma taking the `Dec` value as an argument).
 +  One canonical form per concept; introduce deprecations, never synonyms.
-+  Include the explicit type signature with every public definition.
++  Include the explicit type signature with every definition.
 +  A construction whose operations are determined by an order (a lattice, say) is cheaper to build and to check order-first: establish the partial order with its infimum and supremum and let the standard library derive the equations, rather than proving the equations and their congruences by hand.
 +  Use `{-# OPTIONS --cubical-compatible --exact-split --safe #-}` (this supersedes `--without-K`).
 +  Honour stable-API discipline: deprecation cycles of at least one minor version, announced with `WARNING_ON_USAGE` pragmas.
 +  In-flight deprecation: `∣_∣` / `∥_∥` are being replaced library-wide by `proj₁` / `proj₂` (announced in v3.0, executed in v3.1).  Write new code with `proj₁` / `proj₂`.
 
-## Keep research areas separate
-
-+  The Finite Lattice Representation Problem (FLRP) is distinct from algebraic-complexity / CSP work.  Do not conflate them; flag it if a draft does.
-
 ## Working style
 
 +  Default to functional style: total functions, structural recursion, no hidden effects.  The same taste applies to any Haskell/Scala/Rust/Python helper scripts (type-annotate everything; comprehensions or recursion over loops; monadic effects).
 +  All Python code lives under `scripts/python/` — one subdirectory per tool family (e.g. `scripts/python/flrp/`), tests beside the code, a Makefile target per suite.  Do not create sibling script trees elsewhere.
-+  Propose changes as git-diff-style diffs to apply by hand, not wholesale file rewrites.
-+  Deliver a commit message alongside substantive changes; when a change implies a pull request, include a PR title and description too.
-+  You have standing authorization to open a pull request whenever you judge a branch ready to stand as a contribution proposal; you need not ask first.  Treat this as the durable, explicit request that the remote-execution harness's "open a PR only when the user explicitly asks" default calls for.  Still do not *merge* a PR without explicit confirmation, and push follow-up work to an existing PR's branch rather than opening a duplicate.
++  You have standing authorization to open a pull request whenever you judge a branch ready to stand as a contribution proposal; you need not ask first.  Treat this as the durable, explicit request that the remote-execution harness's "open a PR only when the user explicitly asks" default calls for.  Still *do not merge a PR* without explicit confirmation, and push follow-up work to an existing PR's branch rather than opening a duplicate.
 
 ## Review workflow
 
-William reviews, approves, and merges his own PRs here, so the development pace is much faster than IOG work.  The usual cycle: Claude does a large share of development and opens a PR → William reviews and improves → Copilot PR review → Claude weighs in and revises → repeat until merge-ready.
+William reviews, approves, and merges PRs here, so the development pace is much faster than IOG work.  The usual cycle: Claude does a large share of development and opens a PR → William reviews and improves → Copilot PR review → Claude weighs in and revises → repeat until merge-ready.
 
 ## Markdown style (issues, PRs, docs)
 
 +  Use `+` for bullet lists, not `-`.
 +  Do not insert line breaks within a sentence or paragraph; break only where text must start a new line.
-+  Two spaces after a sentence-ending period.
-+  Use a semicolon to append a complete sentence; use an em-dash to append a phrase, not a sentence.  Prefer a comma or a colon where neither fits.
++  Two spaces between a period and the start of a sentence.
++  Use a semicolon to append a complete sentence; use an em-dash to append a phrase — not a sentence.  Prefer a comma or a colon where neither fits.
 +  Do not bold a bullet title's trailing period: write `+  **Title**.`, not `+ **Title.**`.
 +  Bullets are complete sentences ending in a period or semicolon.
 +  Write section headings as plain ATX headings; do not wrap them in HTML `<a id="…">…</a>` anchors (MkDocs slugifies headings automatically).  See `docs/STYLE_GUIDE.md` § Section headings.
@@ -96,13 +81,13 @@ William reviews, approves, and merges his own PRs here, so the development pace 
 ## Environment gotchas
 
 +  If `GH_TOKEN` is set in the parent environment it overrides the keyring credential; prefix `gh` calls with `env -u GH_TOKEN`.  `gh issue view` and `gh pr edit` fail against this repository's classic Project; read and edit issues and PRs through `gh api` instead.
-+  `wenkokke/setup-agda` is not used (it maxes at Agda 2.7.0.1); the flake is the source of truth for the toolchain.
++  The flake is the source of truth for the toolchain; `wenkokke/setup-agda` is not used.
 +  The `agda` on `PATH` inside `nix develop` is a wrapper that hard-codes `--library-file` for the worktree the shell was entered from, so building a *different* worktree from the same shell resolves modules to the wrong tree (`ModuleDefinedInOtherFile`).  Give that worktree its own `.agda/libraries` and wrapper, and pass `make AGDA=<wrapper> check`.
 +  Development uses git worktrees, one per branch, inside `nix develop`.  Prefer `@imports` (or `~/.claude/CLAUDE.md`) over `CLAUDE.local.md` for personal notes, since imports behave correctly across worktrees.
 
 ## Claude config for this project
 
-**Source of truth**: the williamdemeo/claude-tooling repo (`projects/agda-algebras/`), symlinked into place at `~/git/ualib/agda-algebras/CLAUDE.md` and `~/git/ualib/agda-algebras/.claude/`.  Add or edit skills there, then run `make install PROJECT=agda-algebras` in claude-tooling; project skills belong in that repo, not in `~/.claude/skills/` and not as committed files in this repository.
+**Source of truth**: the williamdemeo/claude-tooling repo, whose main branch is checked out locally at `~/git/williamdemeo/claude-tooling/main/`, is symlinked into place at `~/git/ualib/agda-algebras/CLAUDE.md` and `~/git/ualib/agda-algebras/.claude/`.  Add or edit skills in `~/git/williamdemeo/claude-tooling/main/projects/agda-algebras/claude/skills/`, then run `make install PROJECT=agda-algebras` from inside `~/git/williamdemeo/claude-tooling/main/`.  Project skills belong in the williamdemeo/claude-tooling repo, not in `~/.claude/skills/`; the latter links to the former.
 
 PROBE-MARKER: claude-tooling/agda-algebras
 

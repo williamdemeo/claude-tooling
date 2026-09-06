@@ -102,5 +102,20 @@ bold-punctuation rules it travels with.  The canonical wording is the positive
 formulation `projects/fls/CLAUDE.md` already used, which is checkable, rather
 than the old "limit the use of", which is not.
 
+## 5. Kick-off prompts (2026-09-04)
+
+Summary: every kick-off prompt (a self-contained brief for a fresh session,
+whatever the repo or task) is authored as `docs/kickoffs/<slug>.md` in this
+repo and nowhere else, with the header comment naming its deployed copy
+`~/claude-kickoff-prompts/kickoff-N-<slug>.md`; the deployed copy is written
+alongside, and the session's final message names both paths.
+
+Why it exists: the convention (versioned source here, numbered deployed copy
+for "Read and execute …") already held for kickoffs 1–8, but nothing stated
+it, so a session asked for a kick-off prompt on 2026-09-04 (agda-algebras
+issue #572) delivered it in the chat and a scratchpad, where it would have
+died with the conversation.  The order in `global/CLAUDE.md` makes the
+location mandatory for every session.
+
 Not yet documented here: the `no hard wraps in GitHub bodies` order, which has
 lived in `global/CLAUDE.md` without a section in this file.
