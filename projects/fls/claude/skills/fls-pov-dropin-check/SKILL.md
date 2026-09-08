@@ -51,7 +51,7 @@ proof is a throwaway wiring module that Agda elaborates end-to-end.
 
    open LEDGER-PoV tx
      ∪ˡ-lookup-preserve sum-map-proj₂≡getCoin setToList-Unique
-     (λ {u} {u'} → balance-∪ {u} {u'})
+     (λ {u} {u'} → balance-∪ u u')
      split-balance  noMintTx noMintSubTx
      (λ {u} → outs-disjoint tx {u})
      subutxow-step-coin  utxo₁-tx-spend-eq fresh-top-tx-id
@@ -61,8 +61,11 @@ proof is a throwaway wiring module that Agda elaborates end-to-end.
 
    η-expansion gotcha: lemmas exported from *anonymous* modules with implicit
    parameters (`module _ {utxo utxo' : UTxO}`) will not unify with the
-   parameter type directly — wrap them (`λ {u} {u'} → balance-∪ {u} {u'}`,
-   `λ {u} → outs-disjoint tx {u}`; UTxO's Σ-left-unique eta issue).
+   parameter type directly — wrap them (`λ {u} {u'} → balance-∪ u u'` for the
+   explicit-argument `module _ (utxo utxo' : UTxO)` provider, `λ {u} →
+   outs-disjoint tx {u}`; UTxO's Σ-left-unique eta issue).  Check the provider's
+   actual telescope — `Utxo.Properties.Base` switched `balance-∪` from implicit
+   to explicit map arguments.
 
 5. Force full elaboration by re-stating the consumer's headline theorem:
 
