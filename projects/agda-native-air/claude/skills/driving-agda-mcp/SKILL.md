@@ -134,7 +134,7 @@ nix develop /path/to/agda-native-air#backend --command bash -c 'echo "$AGDA_DIR"
 ls -a /tmp/canary          # anything beyond .git was written by the hook
 ```
 
-`docs/agda-mcp-environment.md` records the inventory this technique produced and
+`docs/agda-mcp/agda-mcp-environment.md` records the inventory this technique produced and
 the anchoring fix (`AGDA_NATIVE_AIR_ROOT`); re-run the canary after any
 shellHook change.
 
