@@ -127,6 +127,26 @@ bullet and let GitHub wrap.  Repo files and commit messages are unaffected and
 keep conventional wrapping: about 80 columns, which reads well in an editor and
 which GitHub re-flows correctly (William's stated preference, 2026-09-09).
 
+# Standing order: bracket issue and PR numbers in GitHub bodies
+
+In the description of a GitHub issue or PR (and in comments, which render the
+same way), write every issue or PR number as a reference link, `[#75]`, and add
+one definition per number at the bottom of the body:
+
+    [#75]: https://github.com/formalverification/agda-native-air/issues/75
+
+Take the URL from the API so a PR resolves to `/pull/N` without guessing:
+`gh api repos/<owner>/<repo>/issues/N --jq '.pull_request.html_url // .html_url'`.
+The one exception is the closing line, `Closes #N`, which GitHub's auto-close
+parser recognizes only in the bare form; keep it as its own paragraph, outside
+any list.
+
+**Why**.  GitHub renders a bare `#N` inside a bullet or numbered list as the
+referenced item's full title and status, not as the number, which wrecks the
+line it sits in; the bracketed form renders as `#N`.  The expansion may only
+happen in lists, but a blanket rule is easier to follow and safe everywhere.
+(Decision 2026-09-09.)
+
 # Standing order: requesting PR reviews
 
 Requesting a PR review, from Copilot or any human, is a human action; it is
