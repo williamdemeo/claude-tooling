@@ -161,5 +161,8 @@ the list through `xargs`; and never name a variable `path`, which is zsh's `$PAT
 array (symptom: "command not found: git" one line later).  Read the output of any
 loop over a space-separated string before trusting what it did: two such loops in
 a 2026-09 session ran to completion having done nothing.
+`set -e` does not abort a multi-line command here either (measured: `set -e;
+false; echo survived` prints), so chain the steps of a script on `&&`, or a
+failure in the middle is followed by the commit and push at the end.
 
 PROBE-MARKER: claude-tooling/global
