@@ -50,7 +50,7 @@ These proof terms, datasets, and drivers are research artifacts; optimize for le
 ## Markdown style (issues, PRs, docs)
 
 +  Use `+` for bullet lists, not `-`.
-+  Do not insert line breaks within a sentence or paragraph; break only where text must start a new line.
++  Wrap repository Markdown and prose inside source files at about 80 columns; that reads well in an editor, and GitHub re-flows it.  Do not hard-wrap GitHub PR and issue bodies or comments, where each newline renders as a line break.
 +  Two spaces after a sentence-ending period.
 +  Use a semicolon to append a complete sentence; use an em-dash to append a phrase, not a sentence.  Prefer a comma or a colon where neither fits.
 +  Do not bold a bullet title's trailing period: write `+  **Title**.`, not `+  **Title.**`.

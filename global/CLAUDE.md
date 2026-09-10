@@ -124,7 +124,8 @@ Text posted to GitHub as a PR description, issue description, or comment must no
 be hard-wrapped: GFM renders each newline in those bodies as a line break, so
 wrapped source displays ragged.  Write one source line per paragraph and per
 bullet and let GitHub wrap.  Repo files and commit messages are unaffected and
-keep conventional wrapping.
+keep conventional wrapping: about 80 columns, which reads well in an editor and
+which GitHub re-flows correctly (William's stated preference, 2026-09-09).
 
 # Standing order: requesting PR reviews
 
