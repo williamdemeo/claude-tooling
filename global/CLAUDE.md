@@ -77,10 +77,46 @@ issues, PRs, and comments.
    list or enumerated list, it should include "the following:" or "as follows:".
 +  **Punctuate pedantically** and prefer the plain word to the fashionable or
    fancy one; example: "foundation" instead of "substrate." 
++  **American spelling**: judgment, memoized, normalize, behavior, center.  Prose
+   written by earlier sessions was British; William's own edits are American.
 
 A project file may restate any of these where a session working in that repository
 will read them, and may add repo-local rules (bullet character, heading form, line
 breaking); none of them relaxes a rule stated here.
+
+# Standing order: design records (ADRs)
+
+An ADR records decisions and the evidence that earned them; it is not where a
+component is explained.  Explanation goes in a companion note the ADR links, in
+the component's own docs directory (agda-native-air:
+`docs/proof-search/overview.md` beside `docs/adr/0001-proof-search-on-agda-mcp.md`).
+The exemplar for the shape is agda-native-air's `docs/adr/0002-agda-mcp.md`.
+
++  **A plain title** (`ADR 0002: agda-mcp`), never a subtitle of terms; then the
+   `File:` line and bullets for **Status**, **Date**, **Tracking**, **Ancestry**.
++  **An executive summary** first: the idea in a few sentences, why it is shaped
+   that way, where it stands, where it goes.
++  **One section per decision area**, plainly headed, with its issues and documents
+   on a "(See also [#N], [#M], and [`doc`].)" line under the heading rather than in
+   it; then **Decision** (one sentence, then bullets), **Evidence** (measurements,
+   tests, field reports, with run identifiers), and **Status** (adopted when and
+   where; what is still open, by issue number).
++  **A numbered decision log** (decision, status, evidence) and **References**
+   (issues, PRs, docs, code map) close the document.
++  **Define every term on first use** and prefer bullets to long paragraphs: a
+   reader who knows the field but not the codebase must be able to follow the
+   decisions without opening the companion note.
++  **Reference-style links** for every issue, PR, and document: `[#N]` and
+   [`path`] in the body, one definition per label at the bottom of the file (bare
+   `#N` does not autolink in a rendered `.md`), URLs from the GitHub API so a PR
+   resolves to `/pull/N`, definition paths relative to the ADR's own directory.
++  **State a null result or a ceiling as the finding** when that is what was
+   measured; the numbers are the evidence, not decoration.
+
+**Why**.  A record written in the vocabulary of the work it records, without
+defining it, is unreadable to the collaborator it exists for; a record that
+explains instead of deciding buries the decisions.  (Decision 2026-09-09, from
+William's review of ADR 0001.)
 
 # Standing order: no hard wraps in GitHub bodies
 
@@ -112,5 +148,17 @@ launched with "Read and execute `~/claude-kickoff-prompts/kickoff-N-<slug>.md`".
 
 **Why**.  A prompt that lives only in a conversation dies with it; the versioned
 file is what lets a kick-off be revised, reused, and audited.
+
+# Environment: the Bash tool's shell is zsh on the local machine
+
+Check with `echo ${ZSH_VERSION:-not-zsh}` before writing a shell loop.  zsh does
+not word-split an unquoted variable, so two bash idioms fail silently: `cmd $LIST`
+with a space-separated list passes one argument (the whole string), and
+`set -- $pair` leaves `$2` empty.  Use an array (`FILES=(a b c)` and
+`"${FILES[@]}"`), write the arguments out, force splitting with `${=VAR}`, or pipe
+the list through `xargs`; and never name a variable `path`, which is zsh's `$PATH`
+array (symptom: "command not found: git" one line later).  Read the output of any
+loop over a space-separated string before trusting what it did: two such loops in
+a 2026-09 session ran to completion having done nothing.
 
 PROBE-MARKER: claude-tooling/global

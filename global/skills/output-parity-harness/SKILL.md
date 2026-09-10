@@ -53,8 +53,8 @@ pre-swap commit, run, then put the new one back:
 
 ```bash
 OLD=<pre-swap-sha>
-FILES="install.sh scripts/lib.sh scripts/check.sh"      # every file you overwrite
-for f in $FILES; do git show "$OLD:$f" > "$f"; done
+FILES=(install.sh scripts/lib.sh scripts/check.sh)      # every file you overwrite; an array, since zsh does not word-split "$FILES"
+for f in "${FILES[@]}"; do git show "$OLD:$f" > "$f"; done
 ./parity.sh
 git checkout -- install.sh scripts/check.sh   # only paths the current commit tracks
 rm scripts/lib.sh                             # paths it DELETED came back untracked
