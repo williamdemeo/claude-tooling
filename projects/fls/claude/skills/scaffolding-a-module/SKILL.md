@@ -20,9 +20,10 @@ open the nearest one and mirror it before consulting anything generic.
    ---
    ```
 
-   `source_branch` names the branch the rendered source link points at:
-   `master` for era modules, but `leios-main` for new Leios-subtree
-   modules (the committee module set the precedent), until Leios merges.
+   `source_branch` is always `master`, on every branch including
+   `leios-main`: the mkdocs hook reads it for the page's source link and
+   the site is configured for `master`; a module that says otherwise is
+   the one page whose link breaks, and Copilot flags it.
 
 2. **One ATX H1** with an explicit anchor: `# Title {#sec:kebab-title}`.
    Subheadings are run-in italics on their own line (`*The vote*`), not ATX.
