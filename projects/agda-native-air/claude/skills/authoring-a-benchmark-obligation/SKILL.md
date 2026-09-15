@@ -1,6 +1,6 @@
 ---
 name: authoring-a-benchmark-obligation
-description: Add a new proof obligation to the agda-native-air baseline benchmark (data/benchmarks/) — the paired obligation/gold Agda fixtures, the benchmark-index.jsonl entry, and the difficulty classification — ready to type-check. Use when curating or extending the M1-5 benchmark suite (Issue #13).
+description: Add a new proof obligation to the agda-native-air baseline benchmark (data/benchmarks/) — the paired obligation/gold Agda fixtures, the benchmark-index.jsonl entry, and the difficulty classification — ready to type-check. Use when curating or extending the M1-5 benchmark suite (Issue #13), and for retrieval-instrument rows (the haystack tier of #129, or a style-paired tier per #142) whose gold must be a shape the retrieval proposer can commit and whose exclusion gates must be re-run.
 ---
 
 # Authoring a benchmark obligation (M1-5)
@@ -36,3 +36,22 @@ The gold must type-check with no errors or unsolved metas.  The obligation file,
 +  Obligation and gold share a module name and differ only at the hole.
 +  The `benchmark-index.jsonl` line, the files on disk, and the difficulty tier agree.
 +  `agda-stdlib` obligations check with no extra setup; `agda-algebras` obligations require `AGDA_ALGEBRAS_ROOT` set before entering the shell.
+
+## Retrieval-instrument rows (the haystack tier, #129)
+
+A row whose point is to measure retrieval (the needle is import-reachable but not `using`-listed and not the statement itself) has four extra rules, each learned from a ledger, and three gates.  All commands below were run on 2026-09-09/10.
+
++  **Shape**.  The gold is ONE lemma applied to goal-context NAMES, with at most three visible binders in the lemma's lane-printed telescope (hypotheses count as visible), because `Retrieve.scala`'s `shapes` saturates every visible binder over context names (arity ≤ 3, ≤ 27 tuples) and `fill_hole` refuses candidates with unsolved metas.  `+-cancelˡ-≡` (four visible binders) and `trans`-composites are unreachable; so is a Π-typed goal, since a hypothesis left in the goal needs a partial application — bind every hypothesis in the clause (`foo m eq = {!!}`).
++  **Statement**.  Not a library lemma up to renaming, and not one after `_<_`/`_≥_`/alias families unfold (the lane-form exclusion compares normalized printings).  Use diagonal instances (`+-suc m m`), hypothesis-consuming instances (`+-mono-≤ le le`), or unification-solved implicits (`length-++ xs`).
++  **Imports**.  Open the haystack with a narrow `using` list of one or two decoys (same family, cannot close the goal in term mode); write the gold with the needle QUALIFIED (`Data.Nat.Properties.+-suc m m`, the text the retrieval ladder renders).  Put the statement's type formers in the Base import: a name not in scope prints qualified in the goal display (`ℕ.suc`, `Data.Nat.Base.≤`) and the scorer never dequalifies goal tokens.
++  **Index**.  `source` stays the library (`agda-stdlib`), `tags` carry `stratum:haystack`, `proofStrategy` is `application`, and the id prefix names the tier (`haystack-…`).
+
+The three gates, from the repo root inside `nix develop .#backend` (build the server once with `cd agda-mcp && cabal build exe:agda-mcp`, then `BIN=$(cd agda-mcp && cabal list-bin exe:agda-mcp)`; the stdlib v0 corpus must be staged at `data/corpora/agda-stdlib/v0/corpus.jsonl`):
+
+```sh
+python3 scripts/python/corpus/check_haystack_exclusion.py --corpus data/corpora/agda-stdlib/v0/corpus.jsonl --index data/benchmarks/benchmark-index.jsonl --tag stratum:haystack
+make proof-search-loop PROOF_SEARCH_PROPOSER=fixed     PROOF_SEARCH_LOOP_IDS="--ids id1,id2" PROOF_SEARCH_RUN_ID=<run> AGDA_MCP_BIN=$BIN
+make proof-search-loop PROOF_SEARCH_PROPOSER=retrieval PROOF_SEARCH_CORPUS=data/corpora/agda-stdlib/v0/corpus.jsonl PROOF_SEARCH_LOOP_IDS="--ids id1,id2" PROOF_SEARCH_RUN_ID=<run> AGDA_MCP_BIN=$BIN
+```
+
+Pass: the checker exits 0; every fixed-space status is `exhausted` or `budget_exceeded`; in the retrieval `report.json`, every outcome's `retrieval.excluded` is empty.  Read `retrieval.proposedLemmas` for whether the needle reached the cut (a null there is a valid instrument, not a defective fixture), and `results.jsonl` for whether its shapes were probed at all (a needle at rank 1 with no probe means the peek rejected it; confirm by driving `type_of` and `fill_hole` on the run's `work/` copy per the `driving-agda-mcp` skill).  Serialize sweeps: two sbt runs in one checkout conflict.

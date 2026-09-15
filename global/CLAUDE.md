@@ -66,10 +66,13 @@ Write the way William writes.  Use William's voice.  A human will notice when
 these rules are broken, so they hold on every surface: repo docs, commit messages,
 issues, PRs, and comments.
 
-+  **Em-dash**.  Use a semicolon to append a complete sentence; use em-dashes
-   (sparingly) to append phrases, never sentences.  Where neither fits, a comma or
-   a colon usually does.  The bias against them is mild in isolation and strong
-   in aggregate; a page carrying one in every paragraph reads as machine-written.
++  **Em-dash**.  Do not use one.  (Tightened 2026-09-11; this rule previously
+   allowed them sparingly for appended phrases, and the allowance was taken too
+   often.)  A semicolon appends a complete sentence; a colon introduces what
+   follows; a comma or a pair of parentheses sets off a phrase.  One of those
+   always fits, and reaching for a dash instead is the tell: a page carrying one
+   in every paragraph reads as machine-written.  Check before handing anything
+   over, prose and code comments alike: `grep -n "—"`.
 +  **Sentence spacing**.  Use two spaces between a period and the start of a
    sentence.
 +  **Punctuation is never bold**.  Write `**this**.`, not `**that.**`.

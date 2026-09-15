@@ -100,3 +100,25 @@ On tracking branches, before every push:
 `python3 build-tools/scripts/property-tracking/scan_properties.py --check`
 (catalog: `build-tools/scripts/property-tracking/properties.yaml`; the generated dashboard and issues
 view live in `build-tools/static/mkdocs/docs/`).
+
+## Cross-checking a spec PR against cardano-ledger
+Dijkstra PRs usually cite the cardano-ledger PR they mirror.  Pull the
+implementation's patches and read the rule side by side with the Agda; the
+premise order, the state each check runs against, and which fields older
+Plutus versions reject are all visible there and nowhere in the fls diff.
+
+    gh api repos/IntersectMBO/cardano-ledger/pulls/N/files --paginate \
+      --jq '.[] | "\(.additions)\t\(.deletions)\t\(.filename)"'          # file list
+    gh api repos/IntersectMBO/cardano-ledger/pulls/N/files --paginate \
+      --jq '.[] | select(.filename | test("Rules/Entities.hs|TxInfo.hs")) | "=== \(.filename)\n\(.patch)\n"'
+    gh api "repos/IntersectMBO/cardano-ledger/contents/<path>" --jq .content | base64 -d > <local>   # a file at master
+    gh api -X GET search/code -f q='repo:IntersectMBO/cardano-ledger <identifier>' \
+      --jq '"total=\(.total_count)", (.items[] | .path)'                 # where a name is used
+
+Where to look for the recurring questions: the rule's `TransitionRule` for
+which state a validation reads (`originalAccounts` vs `accounts`);
+`Dijkstra/TxInfo.hs` `guardDijkstraFeaturesForPlutusV1toV3` for the fields the
+Agda `UsesV4Features` must mirror; the conformance
+`SpecTranslate/Dijkstra/Base.hs` for how keys are translated (network ids
+dropped, credentials kept).  The CIP text is `gh api
+repos/cardano-foundation/CIPs/pulls/N/files --jq '.[].patch'`.

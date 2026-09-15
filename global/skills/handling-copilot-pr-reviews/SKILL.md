@@ -91,12 +91,91 @@ A finding is a hypothesis about the code, not a verdict.  Run something.
    predate the branch that way.
 +  When a fix is *suggested*, check the suggestion is right for the system —
    upstream tools have opinions.  A remedy that sounds safer can introduce a
-   different wrong answer.
+   different wrong answer.  A suggestion that **tightens a checker** has to be
+   measured against the whole corpus before it is adopted: "require the first
+   heading to be `h1`" was the right diagnosis and would have failed nine
+   correct pages, because the theme renders the title outside the element the
+   checker scanned.  Counting the shapes first (45 pages with no heading
+   before the element, 9 with exactly one, an `h1`) turned an approximate rule
+   into an exact one and kept the finding fixed.
 +  Check whether the finding is narrower or **wider** than stated: one reported
    site is often one of several instances of the same defect.
 +  Check whether the stated *effect* is real even when the *mechanism* is.  A
    claim like "this aborts before the fallback" is worth testing; the abort may
    already happen earlier for an unrelated, pre-existing reason.
+
+### Proving a new test is a real control, against the pre-fix module
+
+When the fix is "report this instead of passing/crashing", the test you add
+should fail against the code as it stood.  Run it there rather than assuming,
+because a test that passes both ways pins nothing.  Cheapest way, no branch
+switching and no stash (verified 2026-09-12 on williamdemeo/website #126,
+twice):
+
+```sh
+mkdir -p "$SCRATCH/control" && cd "$SCRATCH/control"
+git -C "$REPO" show HEAD:scripts/python/thing.py > old_thing.py
+cp "$REPO/scripts/python/test_thing.py" test_old.py
+sed -i 's/^import thing as T.*/import old_thing as T/' test_old.py
+# the module's siblings have to resolve, or the import fails for the wrong reason
+for m in _utils helper_a.py helper_b.py; do ln -sf "$REPO/scripts/python/$m" "$m"; done
+python3 - <<'EOF'
+import sys; sys.path.insert(0, '.')
+import test_old as T
+for name in ("test_the_new_case", ...):
+    try:
+        getattr(T, name)(); print(f"  PASSES on old code (NOT a control): {name}")
+    except AssertionError as exc: print(f"  fails, as it must: {name}\n      {exc}")
+    except Exception as exc:      print(f"  crashes, as reported: {name}\n      {type(exc).__name__}: {exc}")
+EOF
+```
+
+Catch each test individually rather than running the file's own `__main__`
+loop: one test raising a non-`AssertionError` aborts that loop and hides
+every test after it, which is precisely what happens when the defect under
+test is a crash.  Distinguish the two outcomes in the output: "reported no
+problems" and "crashed with AttributeError" are different findings, and the
+reply should say which.  Paste the block into the reply; it is the evidence
+a reviewer cannot produce alone.
+
+Where a fix must be proved through the *build* rather than a unit (a hook
+that should now abort), do it destructively but reversibly, with the restore
+armed before the break: `trap 'git checkout -- path' EXIT`, then rename the
+file, run the build, read the exit code and the error, rename it back, and
+re-run the build green.  Show both halves in the reply.
+
+### Controlling a *checker* finding: corrupt a real artifact, not a literal
+
+When the thing under review is a script that verifies output, the strongest
+control is the output itself.  Copy the real built artifact, introduce exactly
+the defect the finding describes, and run both versions of the checker over the
+same bytes:
+
+```sh
+cp -r site "$SCRATCH/mutant"
+python3 - "$SCRATCH/mutant" <<'EOF'   # swap one id, retype one node, wreck one list
+...
+EOF
+python3 scripts/python/check_thing.py "$SCRATCH/mutant"          # expect: problems, exit 1
+git show HEAD:scripts/python/check_thing.py > "$SCRATCH/old.py"  # siblings symlinked as above
+python3 "$SCRATCH/old.py" "$SCRATCH/mutant"                      # expect: OK, exit 0
+```
+
+"The previous checker reports OK and exit 0 on these bytes" is the one sentence
+that settles whether a checker finding was real, and a literal-only test cannot
+produce it.
+
+A checker tends to be wrong in three successive ways, and finding one is a
+reason to look for the other two before the next round does: malformed input
+passing **silently**; malformed input **crashing**, so the run ends in a
+traceback rather than the problem list its exit code promises; and well-formed
+input that does not **correspond** to the source passing, because the check
+tests shape and never compares against the file the output is generated from.
+All three landed on one script across three review rounds of the same PR.
+When fixing correspondence, say in the docstring which expectations are
+re-derived independently and which reuse the renderer's own helpers: the
+reused ones make the check agree with itself on that field, and the reply
+should not let a green run overstate what was proved.
 
 Fix at the root rather than patching the reported instance when the defect has a
 single cause and several symptoms.  When you deviate from a suggestion, say so

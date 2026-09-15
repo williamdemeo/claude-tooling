@@ -1,12 +1,12 @@
 ---
 name: writing-a-corpus-linter
-description: Build a new pure-Python checker over the agda-algebras literate corpus (a linter, an audit, or a corpus extractor) and wire it into the build the way the existing ones are — shared literate front end, tests beside the module, a Makefile target, a CI job, and a ratchet when the backlog cannot be cleared in one PR. Use whenever asked to audit, count, enforce, or harvest something across src/**/*.lagda.md, or when extending unused_imports.py / check_links.py / docstring_audit.py. Includes the validation oracle that turns "I think the parser works" into proof.
+description: Build a new pure-Python checker over the agda-algebras literate corpus (a linter, an audit, a corpus extractor, or a figure the repository commits and must keep true) and wire it into the build the way the existing ones are — shared literate front end, tests beside the module, a Makefile target, a CI job, and a ratchet when the backlog cannot be cleared in one PR. Use whenever asked to audit, count, enforce, or harvest something across src/**/*.lagda.md, or when extending unused_imports.py / check_links.py / docstring_audit.py / corpus_stats.py. Includes the validation oracle that turns "I think the parser works" into proof.
 ---
 
 # Writing a corpus linter for agda-algebras
 
 The repository already carries several: `unused_imports.py`, `check_links.py`,
-`gen_links.py`, `docstring_audit.py`.  A new one is expected to look like them.
+`gen_links.py`, `docstring_audit.py`, `corpus_stats.py`.  A new one is expected to look like them.
 Read one before starting — `check_links.py` is the small model,
 `docstring_audit.py` the large one.
 
@@ -22,7 +22,13 @@ write another fence scanner.
    numbering is preserved at every layer, so diagnostics point into the
    `.lagda.md`, never into a reconstructed buffer.
 +  `clean_code_lines(...)` / `file_code_lines(text)` — the same with comments and
-   string literals blanked, length-preserving so columns survive.
+   string literals blanked, length-preserving so columns survive.  It blanks
+   **pragmas too** (`{-# … #-}`), deliberately, so it is the wrong tool for
+   anything that needs to read one.
++  `options_pragma(code)` — the `OPTIONS` Agda actually applies, or `None`.  Use
+   this, never a search over the raw code: the raw search accepts a pragma that
+   is commented out, which on `--safe` means calling a module safe on the
+   strength of a line its author disabled.
 +  `strip_front_matter`, `expand_target`, `gather_files`.
 
 If a genuinely general helper is missing, add it *there* and prove the move is
@@ -89,6 +95,38 @@ reverted.  Take a `--max-gaps N` argument, fail only above `N`, print a nudge to
 lower the ceiling when the count comes in under it, and pin `N` to today's count
 in a Makefile variable (`DOCSTRING_MAX_GAPS ?= 201`).  CI then enforces the rule
 from day one and the number only moves down.
+
+## A number committed to a file: write it and check it
+
+Some tools do not report findings; they produce a value that has to live in a
+committed file (`docs/_links.md`'s generated sections, `docs/index.md`'s corpus
+stats).  A build-time substitution is not enough.  `corpus_stats.py` exists
+because the MkDocs hook recomputed the landing page's figures while *rendering*
+and never wrote back, so the committed values, which are the ones GitHub shows,
+went six weeks stale and were quoted elsewhere as current.  Build the pair, as
+`gen_links.py` and `corpus_stats.py` both do:
+
++  the default run **writes** the value into the file, and is idempotent;
++  `--check` **verifies** it, printing a `difflib.unified_diff` and the single
+   command that fixes it (`Run:  make corpus-stats`), and exits 1;
++  CI runs `--check`; the writer is its own Makefile target, for the author.
+
+Two failure modes deserve explicit guards, because each lets a stale number pass
+behind a green check:
+
++  **A marker the page no longer carries.**  When the substitution is anchored
+   on `<!-- name -->…<!-- /name -->` pairs, a renamed or misspelled marker
+   silently leaves the hand-typed value standing.  Fail when the page's marker
+   set is not the tool's.
++  **A source of truth that cannot be read.**  When a value is derived from
+   another file (a version from `agda-algebras.agda-lib`, `flake.nix`, or
+   `mkdocs.yml`), a pattern that stops matching must be an error naming the
+   pattern, never a check that quietly measures nothing.
+
+Have the MkDocs hook import the tool instead of keeping its own copy of the
+computation, so the built site and the committed file cannot disagree; and when
+you replace a hook's private scanner with the shared front end, measure that the
+two agree over the whole tree before the swap.
 
 ## Report blind spots as a number
 

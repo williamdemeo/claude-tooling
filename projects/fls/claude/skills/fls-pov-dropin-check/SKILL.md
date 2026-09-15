@@ -38,12 +38,30 @@ proof is a throwaway wiring module that Agda elaborates end-to-end.
 3. Declare an inner `module Check` taking `tx : TopLevelTx`
    `(let open Tx tx; open TxBody txBody)`, then **every parameter the PR does
    NOT discharge, copied verbatim from the consumer's block**, then any
-   hypotheses the provider modules themselves take (e.g. `SUBUTXOW-PoV`'s two
-   batch-threading hypotheses, copied verbatim from the provider).
+   hypotheses the provider modules themselves take (older branches of the
+   stack: `SUBUTXOW-PoV`'s two batch-threading hypotheses; once the batch
+   invariant is proved the providers take none).  Extract the block
+   programmatically rather than by hand, so "verbatim" is guaranteed:
+
+   ```python
+   src = open("src/Ledger/Dijkstra/Specification/Ledger/Properties/PoV.lagda.md").read()
+   head = "module LEDGER-PoV\n  (tx : TopLevelTx) (let open Tx tx; open TxBody txBody)\n"
+   i = src.index(head) + len(head); block = src[i:src.index("\n  where\n", i)]
+   ```
 
 4. In the body, instantiate the provider modules, then apply `LEDGER-PoV`
    positionally with the discharged slots filled by provider lemmas and the
-   rest passed through:
+   rest passed through.  On a branch where the consumer already imports its
+   providers, the block is just the residual parameters (five, once the batch
+   invariant is proved):
+
+   ```agda
+   open LEDGER-PoV tx
+     ∪ˡ-lookup-preserve sum-map-proj₂≡getCoin setToList-Unique
+     ENTITIES-wdrls-bounded SUBENTITIES-wdrls-bounded
+   ```
+
+   On an older branch the discharged slots are filled in place, e.g.
 
    ```agda
    open UTXOW-PoV tx noMintSubTx
@@ -67,18 +85,23 @@ proof is a throwaway wiring module that Agda elaborates end-to-end.
    actual telescope — `Utxo.Properties.Base` switched `balance-∪` from implicit
    to explicit map arguments.
 
-5. Force full elaboration by re-stating the consumer's headline theorem:
+5. Force full elaboration by re-stating the consumer's headline theorem, with
+   whatever hypotheses it carries on that branch (the batch-threading proof
+   adds `FreshTxIds (UTxOOf s) (batchTxIds tx)`, both names imported from
+   `Utxo.Properties.PoV`):
 
    ```agda
    _ : {Γ : LedgerEnv} {s s' : LedgerState}
      → PoolDepositsRegistered (CertStateOf s)
+     → FreshTxIds (UTxOOf s) (batchTxIds tx)
      → Γ ⊢ s ⇀⦇ tx ,LEDGER⦈ s' → getCoin s ≡ getCoin s'
    _ = LEDGER-pov
    ```
 
 6. `agda src/PoVWiringCheck.agda` (prefix `nix develop --command` when outside
-   the Nix shell).  Exit 0 = drop-in verified: `--safe`, zero postulates, and
-   the open-parameter count is exactly the not-yet-discharged set.
+   the Nix shell; about 17 s on a warm `_build/`).  Exit 0 = drop-in verified:
+   `--safe`, zero postulates, and the open-parameter count is exactly the
+   not-yet-discharged set.
 
 7. **Delete the file** (and any stray `PoVWiringCheck.agdai`) before any
    commit; confirm `git status` is clean.  Keep the wiring snippet in the PR
